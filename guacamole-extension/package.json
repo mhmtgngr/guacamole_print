@@ -1,0 +1,80 @@
+{
+  "name": "guacamole-print-agent",
+  "version": "1.0.0",
+  "description": "Local WebSocket server for Guacamole Print Agent - bridges browser extension with system printers and storage",
+  "main": "server/websocket-server.js",
+  "scripts": {
+    "start": "node server/websocket-server.js",
+    "start:agent": "node server/websocket-server.js",
+    "dev": "node server/websocket-server.js --watch",
+    "test": "node test/test-server.js",
+    "build": "echo 'No build step required for WebSocket server'",
+    "package": "echo 'WebSocket server runs directly, no packaging needed'",
+    "install:global": "npm install -g .",
+    "status": "echo 'Checking WebSocket server status...' && node -e \"const ws = require('ws'); const socket = new ws('ws://localhost:8181'); socket.on('open', () => { console.log('✅ Agent is running'); socket.close(); }).on('error', () => { console.log('❌ Agent is not running'); });\"",
+    "stop": "echo 'Stop the agent with Ctrl+C'",
+    "restart": "pkill -f 'websocket-server.js' || true && npm start",
+    "logs": "echo 'WebSocket server logs appear in the console where it is running'"
+  },
+  "keywords": [
+    "guacamole",
+    "print",
+    "agent",
+    "websocket",
+    "remote-desktop",
+    "file-download",
+    "browser-extension",
+    "local-printing",
+    "file-save"
+  ],
+  "author": "Guacamole Print Solution",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "dependencies": {
+    "ws": "^8.14.0",
+    "mime-types": "^2.1.35",
+    "node-cron": "^3.0.2",
+    "chalk": "^4.1.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1",
+    "jest": "^29.7.0",
+    "supertest": "^6.3.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/guacamole-print-solution/guacamole-print-agent.git"
+  },
+  "bugs": {
+    "url": "https://github.com/guacamole-print-solution/guacamole-print-agent/issues"
+  },
+  "homepage": "https://github.com/guacamole-print-solution/guacamole-print-agent#readme",
+  "bin": {
+    "guacamole-print-agent": "server/websocket-server.js"
+  },
+  "files": [
+    "server/",
+    "manifest.json",
+    "background.js",
+    "js/",
+    "css/",
+    "images/",
+    "README.md",
+    "LICENSE"
+  ],
+  "preferGlobal": false,
+  "optionalDependencies": {
+    "win32-print": "^2.0.0"
+  },
+  "os": [
+    "win32",
+    "darwin",
+    "linux"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ]
+}

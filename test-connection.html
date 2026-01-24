@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guacamole Print Agent Connection Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .connected {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .primary {
+            background-color: #007bff;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <h1>Guacamole Print Agent Connection Test</h1>
+    
+    <div id="connection-status" class="status disconnected">
+        Connection Status: Disconnected
+    </div>
+    
+    <button class="primary" onclick="testConnection()">Test Connection</button>
+    <button onclick="clearLog()">Clear Log</button>
+    
+    <h3>Connection Log:</h3>
+    <div id="log" class="log"></div>
+
+    <script>
+        let ws = null;
+        const logDiv = document.getElementById('log');
+        const statusDiv = document.getElementById('connection-status');
+
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${timestamp}] ${message}\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function updateStatus(connected) {
+            if (connected) {
+                statusDiv.className = 'status connected';
+                statusDiv.textContent = 'Connection Status: Connected ✅';
+            } else {
+                statusDiv.className = 'status disconnected';
+                statusDiv.textContent = 'Connection Status: Disconnected ❌';
+            }
+        }
+
+        function testConnection() {
+            log('Testing WebSocket connection...');
+            
+            if (ws) {
+                ws.close();
+            }
+            
+            const urls = [
+                'ws://localhost:8182/ws',
+                'ws://localhost:8182',
+                'ws://127.0.0.1:8182/ws',
+                'ws://127.0.0.1:8182'
+            ];
+
+            let currentUrlIndex = 0;
+            
+            function tryNextUrl() {
+                if (currentUrlIndex >= urls.length) {
+                    log('❌ All connection attempts failed');
+                    updateStatus(false);
+                    return;
+                }
+                
+                const url = urls[currentUrlIndex];
+                log(`🔌 Trying WebSocket URL: ${url}`);
+                
+                try {
+                    ws = new WebSocket(url);
+                    
+                    ws.onopen = () => {
+                        log(`✅ Connected to local print agent via: ${url}`);
+                        updateStatus(true);
+                        
+                        // Send a test message
+                        ws.send(JSON.stringify({
+                            type: 'ping',
+                            data: { test: true }
+                        }));
+                    };
+                    
+                    ws.onmessage = (event) => {
+                        try {
+                            const message = JSON.parse(event.data);
+                            log(`📨 Received: ${JSON.stringify(message)}`);
+                            
+                            if (message.type === 'connection_ack') {
+                                log('🎯 Print agent acknowledged connection');
+                            }
+                        } catch (error) {
+                            log(`❌ Error parsing message: ${error.message}`);
+                        }
+                    };
+                    
+                    ws.onclose = () => {
+                        log('🔌 WebSocket connection closed');
+                        updateStatus(false);
+                    };
+                    
+                    ws.onerror = (error) => {
+                        log(`❌ WebSocket error for ${url}: ${error.message || 'Unknown error'}`);
+                        currentUrlIndex++;
+                        setTimeout(tryNextUrl, 1000);
+                    };
+                    
+                } catch (error) {
+                    log(`❌ Exception for ${url}: ${error.message}`);
+                    currentUrlIndex++;
+                    setTimeout(tryNextUrl, 1000);
+                }
+            }
+            
+            tryNextUrl();
+        }
+
+        function clearLog() {
+            logDiv.innerHTML = '';
+        }
+
+        // Auto-test on page load
+        window.onload = () => {
+            log('🚀 Guacamole Print Agent Test Page Loaded');
+            setTimeout(testConnection, 1000);
+        };
+    </script>
+</body>
+</html>

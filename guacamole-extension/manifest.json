@@ -1,0 +1,75 @@
+{
+  "manifest_version": 3,
+  "name": "Guacamole Print Agent",
+  "version": "1.0.0",
+  "description": "Intercepts Guacamole file downloads and routes them to local printers or storage",
+  "author": "Guacamole Print Solution",
+  "homepage_url": "https://github.com/guacamole-print-solution",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "downloads",
+    "webRequest",
+    "webNavigation",
+    "scripting"
+  ],
+  "host_permissions": [
+    "ws://localhost:8181/*",
+    "wss://localhost:8181/*",
+    "http://*/guacamole/*",
+    "https://*/guacamole/*",
+    "http://*/*",
+    "https://*/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*/guacamole/*",
+        "https://*/guacamole/*",
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Guacamole Print Agent",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "64": "icons/icon64.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "64": "icons/icon64.png",
+    "128": "icons/icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "popup.html",
+        "popup.js",
+        "styles.css",
+        "icons/*"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "options_page": "options.html",
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' ws://localhost:8181 wss://localhost:8181"
+  }
+}

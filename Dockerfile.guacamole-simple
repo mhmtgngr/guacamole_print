@@ -1,0 +1,7 @@
+FROM guacamole/guacamole:1.5.5
+
+# Copy enhanced index.html with print extension
+COPY guacamole-enhanced-index.html /opt/guacamole/tomcat/webapps/guacamole/ROOT.war/
+
+# Expose port 8080
+EXPOSE 8080

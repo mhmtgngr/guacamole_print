@@ -1,0 +1,53 @@
+# ==================== GUACAMOLE WITH FILE AUTH - NO DATABASE ====================
+# Simple setup with file-based authentication to bypass database issues
+
+version: '3.8'
+
+services:
+  # Guacamole daemon (guacd)
+  guacd:
+    image: guacamole/guacd:latest
+    container_name: guacamole-daemon-simple
+    networks:
+      - guacamole-simple-network
+    restart: unless-stopped
+
+  # Guacamole web application with file authentication
+  guacamole:
+    image: guacamole/guacamole:latest
+    container_name: guacamole-web-simple
+    environment:
+      GUACD_HOSTNAME: guacd
+      # Disable database authentication
+      GUACAMOLE_HOME: /etc/guacamole
+    ports:
+      - "8080:8080"
+    depends_on:
+      - guacd
+    volumes:
+      - ./guacamole-users.xml:/etc/guacamole/user-mapping.xml:ro
+    networks:
+      - guacamole-simple-network
+    restart: unless-stopped
+
+  # Print Agent WebSocket server
+  print-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.print-agent
+    container_name: guacamole-print-agent-simple
+    ports:
+      - "8182:8182"
+    networks:
+      - guacamole-simple-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').createServer().listen(3000).close()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  guacamole-simple-network:
+    driver: bridge

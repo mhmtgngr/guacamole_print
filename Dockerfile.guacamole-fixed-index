@@ -1,0 +1,7 @@
+FROM guacamole/guacamole:1.5.5
+
+# Copy enhanced index.html with correct print agent path
+COPY guacamole-enhanced-index.html /opt/guacamole/webapp/WEB-INF/index.html
+
+# Expose port 8080
+EXPOSE 8080

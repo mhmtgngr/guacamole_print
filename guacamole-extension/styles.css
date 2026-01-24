@@ -1,0 +1,409 @@
+/* Guacamole Print Agent - Styles */
+
+/* Modal Styles */
+.guacamole-print-modal {
+    display: none;
+    position: fixed;
+    z-index: 999999;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    align-items: center;
+    justify-content: center;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px;
+}
+
+.guacamole-modal-show {
+    animation: guacamole-fadeIn 0.3s ease-out;
+}
+
+.guacamole-modal-content {
+    background-color: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    max-width: 500px;
+    width: 90%;
+    max-height: 80vh;
+    overflow: hidden;
+    animation: guacamole-slideIn 0.3s ease-out;
+}
+
+.guacamole-modal-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.guacamole-modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.guacamole-close-btn {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background-color 0.2s;
+}
+
+.guacamole-close-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.guacamole-modal-body {
+    padding: 20px;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.guacamole-file-info {
+    margin-bottom: 20px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 6px;
+    border-left: 4px solid #667eea;
+}
+
+.guacamole-file-info h4 {
+    margin: 0 0 10px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+    word-break: break-all;
+}
+
+.guacamole-file-info p {
+    margin: 5px 0;
+    color: #666;
+    font-size: 13px;
+}
+
+.guacamole-preview-container {
+    margin: 15px 0;
+    text-align: center;
+    max-height: 200px;
+    overflow: hidden;
+    border-radius: 6px;
+    background-color: #f8f9fa;
+}
+
+.guacamole-preview-container img {
+    max-width: 100%;
+    max-height: 200px;
+    object-fit: contain;
+    border-radius: 4px;
+}
+
+.guacamole-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 10px;
+    margin: 20px 0;
+}
+
+.guacamole-btn {
+    padding: 12px 16px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s;
+    text-align: center;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.guacamole-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.guacamole-btn:active {
+    transform: translateY(0);
+}
+
+.guacamole-btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.guacamole-btn-primary:hover {
+    background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+}
+
+.guacamole-btn-secondary {
+    background-color: #e9ecef;
+    color: #495057;
+    border: 1px solid #dee2e6;
+}
+
+.guacamole-btn-secondary:hover {
+    background-color: #dee2e6;
+    border-color: #adb5bd;
+}
+
+.guacamole-btn-cancel {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.guacamole-btn-cancel:hover {
+    background-color: #f1b0b7;
+    border-color: #e1a3a8;
+}
+
+.guacamole-remember-choice {
+    margin-top: 15px;
+    padding: 10px;
+    background-color: #e7f3ff;
+    border-radius: 6px;
+    border: 1px solid #b3d9ff;
+}
+
+.guacamole-remember-choice label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    color: #0066cc;
+    font-size: 13px;
+}
+
+.guacamole-remember-choice input[type="checkbox"] {
+    margin-right: 8px;
+    accent-color: #667eea;
+}
+
+.guacamole-modal-footer {
+    padding: 0 20px 20px;
+}
+
+.guacamole-progress {
+    margin-top: 15px;
+}
+
+.guacamole-progress-bar {
+    height: 8px;
+    background-color: #e9ecef;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.guacamole-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    width: 0%;
+    transition: width 0.3s ease;
+}
+
+.guacamole-progress-text {
+    font-size: 12px;
+    color: #666;
+    text-align: center;
+    display: block;
+}
+
+/* Status Indicator */
+.guacamole-status-indicator {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 999998;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 8px 12px;
+    border-radius: 20px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 12px;
+    backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+}
+
+.guacamole-status-indicator:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+}
+
+.guacamole-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    animation: guacamole-pulse 2s infinite;
+}
+
+.guacamole-status-connected {
+    background-color: #28a745;
+}
+
+.guacamole-status-disconnected {
+    background-color: #dc3545;
+}
+
+.guacamole-status-connecting {
+    background-color: #ffc107;
+}
+
+/* Animations */
+@keyframes guacamole-fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes guacamole-slideIn {
+    from {
+        transform: translateY(-20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes guacamole-pulse {
+    0% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+    100% {
+        opacity: 1;
+    }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    .guacamole-modal-content {
+        background-color: #2d3748;
+        color: #e2e8f0;
+    }
+    
+    .guacamole-file-info {
+        background-color: #4a5568;
+        border-left-color: #9f7aea;
+    }
+    
+    .guacamole-file-info h4 {
+        color: #f7fafc;
+    }
+    
+    .guacamole-file-info p {
+        color: #cbd5e0;
+    }
+    
+    .guacamole-preview-container {
+        background-color: #4a5568;
+    }
+    
+    .guacamole-btn-secondary {
+        background-color: #4a5568;
+        color: #e2e8f0;
+        border-color: #718096;
+    }
+    
+    .guacamole-btn-secondary:hover {
+        background-color: #718096;
+    }
+    
+    .guacamole-remember-choice {
+        background-color: #2c5282;
+        border-color: #2a4e7c;
+    }
+    
+    .guacamole-remember-choice label {
+        color: #90cdf4;
+    }
+    
+    .guacamole-progress-bar {
+        background-color: #4a5568;
+    }
+    
+    .guacamole-progress-text {
+        color: #cbd5e0;
+    }
+    
+    .guacamole-status-indicator {
+        background: rgba(45, 55, 72, 0.95);
+        color: #e2e8f0;
+    }
+}
+
+/* Responsive design */
+@media (max-width: 600px) {
+    .guacamole-modal-content {
+        width: 95%;
+        margin: 20px;
+    }
+    
+    .guacamole-actions {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+    
+    .guacamole-btn {
+        min-height: 48px;
+        font-size: 16px;
+    }
+    
+    .guacamole-status-indicator {
+        top: 10px;
+        right: 10px;
+        font-size: 11px;
+    }
+}
+
+/* High DPI support */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+    .guacamole-status-dot {
+        width: 6px;
+        height: 6px;
+    }
+}
+
+/* Print styles */
+@media print {
+    .guacamole-print-modal,
+    .guacamole-status-indicator {
+        display: none !important;
+    }
+}
+
+/* Animation performance */
+.guacamole-print-modal {
+    will-change: opacity;
+    transform: translateZ(0);
+}
+
+.guacamole-modal-content {
+    will-change: transform, opacity;
+    transform: translateZ(0);
+}

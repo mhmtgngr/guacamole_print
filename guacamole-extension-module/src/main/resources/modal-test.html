@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Modal Fix Test</title>
+    <script src="js/print-agent-client.js"></script>
+    <link rel="stylesheet" href="css/print-agent.css">
+</head>
+<body>
+    <h1>Modal Fix Verification</h1>
+    <p>This page tests if the modal display issue is fixed.</p>
+    
+    <button onclick="testModal()" style="background: #22c55e; color: white; padding: 15px 30px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px;">
+        🎯 Test Print Dialog
+    </button>
+    
+    <script>
+        function testModal() {
+            console.log('🧪 Testing modal display...');
+            
+            // Test with PDF file
+            if (window.guacamolePrintAgent && window.guacamolePrintAgent.showModal) {
+                window.guacamolePrintAgent.showModal(
+                    'test-document.pdf', 
+                    'application/pdf', 
+                    null // Don't need actual content for visibility test
+                );
+            } else {
+                alert('❌ Extension not loaded properly - check console for errors');
+            }
+        }
+        
+        // Auto-test after 2 seconds
+        setTimeout(testModal, 2000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Guacamole Print Extension - Usage Guide</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .success { color: #28a745; background: #d4edda; padding: 10px; border-radius: 5px; margin: 10px 0; }
+        .code { background: #f8f9fa; padding: 10px; border-radius: 5px; border-left: 4px solid #007bff; margin: 10px 0; }
+        .test-links { margin: 20px 0; }
+        .test-links a { display: inline-block; margin: 10px; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; }
+        .test-links a:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+    <h1>🖨️ Guacamole Print Extension</h1>
+    
+    <div class="success">
+        <h2>✅ Extension Successfully Built and Deployed!</h2>
+        <p>The Guacamole print extension has been successfully integrated and is ready for testing.</p>
+    </div>
+    
+    <h2>🐳 Docker Commands</h2>
+    <div class="code">
+        docker run -d -p 8080:8080 guacamole-with-print-extension:latest
+    </div>
+    
+    <h2>🧪 Test Pages</h2>
+    <div class="test-links">
+        <a href="/test.html">🧪 Test Extension</a>
+        <a href="/index.html">📄 Extension Info</a>
+    </div>
+    
+    <h2>🔧 How It Works</h2>
+    <ul>
+        <li><strong>PDF Detection</strong>: Automatically detects PDF files and shows print dialog</li>
+        <li><strong>Print Button Override</strong>: Intercepts Guacamole's print button clicks</li>
+        <li><strong>Smart Defaults</strong>: PDF files default to print action instead of download</li>
+        <li><strong>Visual Feedback</strong>: Clear UI with prominent print option for PDFs</li>
+    </ul>
+    
+    <h2>📋 Extension Features</h2>
+    <ul>
+        <li>✅ Intercept PDF downloads and show print dialog</li>
+        <li>✅ Override Guacamole print button behavior</li>
+        <li>✅ Smart file type detection (PDF vs other files)</li>
+        <li>✅ Prominent print button styling for PDFs</li>
+        <li>✅ Progress indicators and user feedback</li>
+        <li>✅ Responsive design and dark mode support</li>
+    </ul>
+    
+    <h2>🎯 Problem Solved</h2>
+    <p><strong>Original Issue</strong>: Guacamole printer redirect opened PDF save dialog instead of print dialog.</p>
+    <p><strong>Solution</strong>: Extension now intercepts PDFs and displays a proper print dialog with options:</p>
+    <ul>
+        <li>🖨️ <strong>Print</strong> (prominent, default for PDFs)</li>
+        <li>💾 <strong>Download</strong></li>
+        <li>📂 <strong>Open</strong></li>
+        <li>❌ <strong>Cancel</strong></li>
+    </ul>
+    
+    <h2>🚀 Next Steps</h2>
+    <ol>
+        <li>Run the Guacamole container with the extension</li>
+        <li>Access your Guacamole instance</li>
+        <li>Try printing documents - you should see the new print dialog</li>
+        <li>Test with PDF files to see the enhanced print flow</li>
+    </ol>
+</body>
+</html>

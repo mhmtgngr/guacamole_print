@@ -1,0 +1,25 @@
+/*
+ * Guacamole Print Agent Extension
+ * Embeds file transfer and print capabilities directly into Guacamole web interface
+ */
+
+# Configuration
+GUACAMOLE_VERSION="1.5.4"
+EXTENSION_NAME="guacamole-print-agent"
+EXTENSION_CLASS="org.apache.guacamole.printagent.extension.PrintAgentExtension"
+
+# Directories
+SRC_DIR="src/main/java"
+RESOURCES_DIR="src/main/resources"
+TARGET_DIR="$1"
+
+# Check if source directory exists
+if [ ! -d "$SRC_DIR" ]; then
+    mkdir -p "$SRC_DIR"
+fi
+
+if [ ! -d "$RESOURCES_DIR" ]; then
+    mkdir -p "$RESOURCES_DIR"
+fi
+
+echo "Creating Guacamole Extension Module..."

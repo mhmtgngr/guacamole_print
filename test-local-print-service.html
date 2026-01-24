@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guacamole Print Agent - Local Service Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            background: #007bff;
+            color: white;
+        }
+        button:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+    <h1>Guacamole Print Agent - Local Windows Service Test</h1>
+
+    <div id="status" class="status info">Initializing...</div>
+
+    <div>
+        <button onclick="testConnection()">Test WebSocket Connection</button>
+        <button onclick="testWS()">Test ws://</button>
+        <button onclick="testWSS()">Test wss://</button>
+    </div>
+
+    <div id="logs" style="margin-top: 20px;"></div>
+
+    <script>
+        function updateStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = `status ${type}`;
+            statusDiv.textContent = message;
+        }
+
+        function addLog(message) {
+            const logsDiv = document.getElementById('logs');
+            const logEntry = document.createElement('div');
+            logEntry.style.padding = '5px';
+            logEntry.style.borderBottom = '1px solid #ddd';
+            logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logsDiv.insertBefore(logEntry, logsDiv.firstChild);
+        }
+
+        async function testConnection(url) {
+            updateStatus(`Connecting to ${url}...`, 'info');
+            addLog(`Attempting to connect to ${url}`);
+
+            return new Promise((resolve) => {
+                const ws = new WebSocket(url);
+
+                const timeout = setTimeout(() => {
+                    ws.close();
+                    updateStatus(`Failed: Timeout connecting to ${url}`, 'error');
+                    addLog(`❌ Timeout: Could not connect to ${url}`);
+                    resolve(false);
+                }, 5000);
+
+                ws.onopen = () => {
+                    clearTimeout(timeout);
+                    updateStatus(`✅ Connected to ${url}`, 'success');
+                    addLog(`✅ Successfully connected to ${url}`);
+
+                    // Send ping
+                    ws.send(JSON.stringify({ type: 'ping' }));
+
+                    // Close after successful connection
+                    setTimeout(() => ws.close(), 1000);
+
+                    resolve(true);
+                };
+
+                ws.onerror = (error) => {
+                    clearTimeout(timeout);
+                    updateStatus(`❌ Failed to connect to ${url}`, 'error');
+                    addLog(`❌ Error connecting to ${url}: ${error}`);
+                    resolve(false);
+                };
+
+                ws.onclose = () => {
+                    clearTimeout(timeout);
+                };
+
+                ws.onmessage = (event) => {
+                    addLog(`📨 Received: ${event.data}`);
+                };
+            });
+        }
+
+        async function testWS() {
+            const urls = [
+                'ws://localhost:8181/ws',
+                'ws://127.0.0.1:8181/ws'
+            ];
+
+            addLog('Testing WebSocket (ws://) connections...');
+            for (const url of urls) {
+                await testConnection(url);
+            }
+        }
+
+        async function testWSS() {
+            const urls = [
+                'wss://localhost:8181/ws',
+                'wss://127.0.0.1:8181/ws'
+            ];
+
+            addLog('Testing Secure WebSocket (wss://) connections...');
+            for (const url of urls) {
+                await testConnection(url);
+            }
+        }
+
+        async function testConnection() {
+            updateStatus('Testing all connections...', 'info');
+            addLog('Starting full connection test...');
+
+            await testWS();
+            await testWSS();
+
+            updateStatus('Test complete - check logs above', 'info');
+        }
+
+        // Auto-test on load
+        window.addEventListener('load', () => {
+            addLog('Page loaded - Windows service should be on port 8181');
+            addLog('Local Windows service configuration:');
+            addLog('  - Host: 127.0.0.1');
+            addLog('  - Port: 8181');
+            addLog('  - SSL: Enabled');
+            addLog('  - Certificate: GuacamolePrintAgent');
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+# Guacamole user properties file
+# Create default admin user if database is not available
+
+user-mapping: <?xml version="1.0" encoding="UTF-8"?>
+<config>
+  <!-- Admin user -->
+  <authorize username="guacadmin" password="guacadmin">
+    <connection name="Local Test">
+      <protocol>vnc</protocol>
+      <param name="hostname">localhost</param>
+      <param name="port">5901</param>
+    </connection>
+  </authorize>
+</config>

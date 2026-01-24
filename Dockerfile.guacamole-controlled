@@ -1,0 +1,12 @@
+FROM guacamole/guacamole:1.5.5
+
+# Copy print extension JavaScript to be loaded automatically
+COPY guacamole-extension-module/src/main/resources/js/print-agent-client.js /opt/guacamole/webapp/
+COPY guacamole-extension-module/src/main/resources/css/print-agent.css /opt/guacamole/webapp/
+
+# Create a startup script that injects our print extension
+RUN echo '<script src="print-agent-client.js"></script>' >> /opt/guacamole/webapp/WEB-INF/index.html && \
+    echo '<link rel="stylesheet" href="print-agent.css">' >> /opt/guacamole/webapp/WEB-INF/index.html
+
+# Expose port 8080
+EXPOSE 8080

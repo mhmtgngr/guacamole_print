@@ -1,0 +1,19 @@
+{
+  "name": "testuser",
+  "displayName": "Test User",
+  "directory": "C:\\Users\\testuser\\",
+  "quota": "524288000",
+  "maxSessionFiles": 100,
+  "defaultActions": {
+    ".pdf": "prompt",
+    ".xlsx": "download",
+    "docx": "download",
+    "doc": "download",
+    "jpg": "prompt",
+    "jpeg": "prompt", 
+    "png": "prompt",
+    "txt": "download",
+    "zip": "download",
+    "rar": "download"
+  }
+}

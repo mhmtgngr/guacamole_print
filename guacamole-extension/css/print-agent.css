@@ -1,0 +1,567 @@
+/* ==================== GUACAMOLE PRINT AGENT STYLES ==================== */
+
+/* Base Styles */
+.guacamole-print-agent * {
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Print Button */
+.guacamole-print-button {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 10000;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  transition: all 0.3s ease;
+}
+
+.guacamole-print-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.guacamole-print-button svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Status Indicator */
+.guacamole-status-indicator {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  z-index: 10000;
+  background: white;
+  border-radius: 20px;
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.guacamole-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+.guacamole-status-connected .guacamole-status-dot {
+  background: #10b981;
+}
+
+.guacamole-status-disconnected .guacamole-status-dot {
+  background: #ef4444;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Panels */
+.guacamole-panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10001;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  width: 90%;
+  max-width: 500px;
+  max-height: 80vh;
+  overflow: hidden;
+  opacity: 1;
+  transition: all 0.3s ease;
+}
+
+.guacamole-panel.guacamole-hidden {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.9);
+  pointer-events: none;
+}
+
+.guacamole-panel-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.guacamole-panel-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.guacamole-close-button {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.guacamole-close-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.guacamole-panel-content {
+  padding: 20px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.guacamole-panel-footer {
+  padding: 20px;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+/* Settings */
+.guacamole-setting {
+  margin-bottom: 20px;
+}
+
+.guacamole-setting label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.guacamole-setting select,
+.guacamole-setting input[type="text"] {
+  width: 100%;
+  padding: 10px 12px;
+  border: 2px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.2s ease;
+}
+
+.guacamole-setting select:focus,
+.guacamole-setting input[type="text"]:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.guacamole-setting input[type="checkbox"] {
+  margin-right: 8px;
+  transform: scale(1.2);
+}
+
+/* History */
+.guacamole-history-filters {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  align-items: center;
+}
+
+.guacamole-history-filters select {
+  flex: 1;
+  padding: 8px 12px;
+  border: 2px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.guacamole-history-list {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.guacamole-history-item {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f3f4f6;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background-color 0.2s ease;
+}
+
+.guacamole-history-item:hover {
+  background: #f9fafb;
+}
+
+.guacamole-history-item:last-child {
+  border-bottom: none;
+}
+
+.guacamole-history-file {
+  font-weight: 500;
+  color: #111827;
+  flex: 1;
+  margin-right: 12px;
+  word-break: break-word;
+}
+
+.guacamole-history-details {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.guacamole-history-action {
+  background: #e0e7ff;
+  color: #4338ca;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.guacamole-history-action.printed {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.guacamole-history-action.saved {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.guacamole-history-action.failed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.guacamole-history-action.downloaded {
+  background: #f3e8ff;
+  color: #6b21a8;
+}
+
+/* Buttons */
+.guacamole-button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.guacamole-button-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.guacamole-button-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.guacamole-button-secondary {
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.guacamole-button-secondary:hover {
+  background: #e5e7eb;
+}
+
+.guacamole-button-small {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+/* Dialog */
+.guacamole-dialog {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 10002;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.guacamole-dialog-content {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.guacamole-dialog-header {
+  padding: 24px;
+  text-align: center;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.guacamole-dialog-header h3 {
+  margin: 0 0 12px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.guacamole-dialog-header p {
+  margin: 4px 0;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.guacamole-dialog-actions {
+  padding: 20px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.guacamole-dialog-actions .guacamole-button-primary {
+  grid-column: 1 / -1;
+}
+
+/* Notifications */
+.guacamole-notification {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  z-index: 10003;
+  background: white;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  min-width: 300px;
+  max-width: 400px;
+  animation: slideInRight 0.3s ease;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.guacamole-notification-success {
+  border-left: 4px solid #10b981;
+}
+
+.guacamole-notification-error {
+  border-left: 4px solid #ef4444;
+}
+
+.guacamole-notification-info {
+  border-left: 4px solid #3b82f6;
+}
+
+.guacamole-notification-warning {
+  border-left: 4px solid #f59e0b;
+}
+
+.guacamole-notification-content {
+  flex: 1;
+}
+
+.guacamole-notification-title {
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 4px;
+}
+
+.guacamole-notification-message {
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.guacamole-notification-close {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 0;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.guacamole-notification-close:hover {
+  color: #6b7280;
+}
+
+/* Loading States */
+.guacamole-loading {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #e5e7eb;
+  border-top: 2px solid #667eea;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .guacamole-print-button {
+    top: auto;
+    bottom: 20px;
+    right: 20px;
+    padding: 10px 16px;
+    font-size: 12px;
+  }
+  
+  .guacamole-status-indicator {
+    top: auto;
+    bottom: 20px;
+    left: 20px;
+  }
+  
+  .guacamole-panel {
+    width: 95%;
+    max-width: none;
+  }
+  
+  .guacamole-dialog {
+    padding: 20px;
+  }
+  
+  .guacamole-dialog-content {
+    width: 100%;
+  }
+  
+  .guacamole-dialog-actions {
+    grid-template-columns: 1fr;
+  }
+  
+  .guacamole-notification {
+    right: 10px;
+    left: 10px;
+    min-width: auto;
+    max-width: none;
+  }
+}
+
+/* High Contrast Mode */
+@media (prefers-contrast: high) {
+  .guacamole-print-button {
+    border: 2px solid #000;
+  }
+  
+  .guacamole-panel {
+    border: 2px solid #000;
+  }
+  
+  .guacamole-button {
+    border: 2px solid #000;
+  }
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+  .guacamole-status-indicator,
+  .guacamole-panel,
+  .guacamole-dialog-content,
+  .guacamole-notification {
+    background: #1f2937;
+    color: #f9fafb;
+  }
+  
+  .guacamole-panel-header {
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  }
+  
+  .guacamole-history-item {
+    border-color: #374151;
+  }
+  
+  .guacamole-history-item:hover {
+    background: #374151;
+  }
+  
+  .guacamole-setting label {
+    color: #f9fafb;
+  }
+  
+  .guacamole-setting select,
+  .guacamole-setting input[type="text"] {
+    background: #374151;
+    border-color: #4b5563;
+    color: #f9fafb;
+  }
+  
+  .guacamole-button-secondary {
+    background: #374151;
+    color: #f9fafb;
+    border-color: #4b5563;
+  }
+  
+  .guacamole-button-secondary:hover {
+    background: #4b5563;
+  }
+}

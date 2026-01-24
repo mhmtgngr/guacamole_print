@@ -1,0 +1,26 @@
+{
+  "name": "guacamole-print-agent",
+  "version": "1.0.0",
+  "description": "WebSocket server for Guacamole print agent connections",
+  "main": "print-agent-server.js",
+  "scripts": {
+    "start": "node print-agent-server.js",
+    "dev": "node print-agent-server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "guacamole",
+    "print",
+    "agent",
+    "websocket",
+    "server"
+  ],
+  "author": "Guacamole Print Solution",
+  "license": "MIT",
+  "dependencies": {
+    "ws": "^8.13.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

@@ -1,0 +1,81 @@
+# ==================== GUACAMOLE WITH PRINT AGENT SERVER ====================
+# Production-ready Docker image with integrated WebSocket print agent server
+
+FROM guacamole/guacamole:latest
+
+# Install Node.js and npm
+RUN apt-get update && apt-get install -y \
+    curl \
+    && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create print agent directory
+WORKDIR /opt/guacamole-print-agent
+
+# Copy package files
+COPY package*.json ./
+
+# Install Node.js dependencies
+RUN npm install --production
+
+# Copy print agent server
+COPY print-agent-server.js ./
+
+# Copy enhanced print agent client JavaScript
+COPY guacamole-extension/js/print-agent-client.js /opt/guacamole/print-agent-client.js
+
+# Create startup script that starts both Guacamole and print agent
+COPY <<'EOF' /opt/guacamole/start-with-print-agent.sh
+#!/bin/bash
+
+# Start the print agent WebSocket server in background
+echo "🚀 Starting Guacamole Print Agent WebSocket server..."
+cd /opt/guacamole-print-agent
+node print-agent-server.js &
+PRINT_AGENT_PID=$!
+
+# Wait a moment for the print agent to start
+sleep 2
+
+# Test that print agent is running
+echo "🧪 Testing print agent server..."
+curl -s http://localhost:8182/health > /dev/null
+if [ $? -eq 0 ]; then
+    echo "✅ Print agent server is running on port 8182"
+else
+    echo "❌ Print agent server failed to start"
+fi
+
+# Start Guacamole
+echo "🌐 Starting Guacamole..."
+exec /opt/guacamole/bin/start.sh
+
+# Cleanup function
+cleanup() {
+    echo "🛑 Shutting down..."
+    if [ ! -z "$PRINT_AGENT_PID" ]; then
+        kill $PRINT_AGENT_PID 2>/dev/null
+    fi
+    exit 0
+}
+
+# Trap signals
+trap cleanup SIGTERM SIGINT
+
+# Wait for processes
+wait
+EOF
+
+# Make the startup script executable
+RUN chmod +x /opt/guacamole/start-with-print-agent.sh
+
+# Expose both Guacamole and print agent ports
+EXPOSE 8080 8182
+
+# Set the entrypoint to use our custom script
+ENTRYPOINT ["/opt/guacamole/start-with-print-agent.sh"]
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD curl -f http://localhost:8080/guacamole || exit 1

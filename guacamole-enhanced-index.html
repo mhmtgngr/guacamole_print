@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guacamole - Remote Desktop</title>
+    <script type="application/javascript">
+        // Guacamole WebSocket Tunnel API
+        var Guacamole;
+    </script>
+    <style>
+        /* Basic reset and layout */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f5f5f5;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 8px;
+        }
+        
+        .header p {
+            font-size: 16px;
+            color: #666;
+            margin: 0;
+        }
+        
+        .client-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+        
+        .client-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            border: 1px solid #e1e4e8;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            cursor: pointer;
+        }
+        
+        .client-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            border-color: #007bff;
+        }
+        
+        .client-name {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #495057;
+        }
+        
+        .client-status {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 4px;
+        }
+        
+        .status-connected {
+            color: #28a745;
+            font-weight: bold;
+        }
+        
+        .status-disconnected {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        
+        .connecting-spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #007bff;
+            border-top: 2px solid transparent;
+            border-radius: 50%;
+            border-left-color: #007bff;
+            border-right-color: #007bff;
+            border-bottom: 2px solid #007bff;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .connect-btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        
+        .connect-btn:hover {
+            background: #0056b3;
+        }
+        
+        .print-status {
+            background: #e3f2fd;
+            border-radius: 4px;
+            padding: 12px;
+            margin-top: 20px;
+            text-align: center;
+            border: 1px solid #f8d7da;
+        }
+        
+        .print-status-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #495057;
+        }
+        
+        .print-status-message {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        /* Embedded print agent styles */
+        .guacamole-print-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 9999;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 14px;
+        }
+        
+        .guacamole-modal-content {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            margin: 50px auto;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        .guacamole-modal-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-radius: 8px 8px 0 0;
+            position: relative;
+        }
+        
+        .guacamole-modal-header h3 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .guacamole-status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 10px;
+            display: inline-block;
+        }
+        
+        .guacamole-status-connected {
+            background-color: #28a745;
+        }
+        
+        .guacamole-status-connecting {
+            background-color: #ffc107;
+            animation: pulse 2s infinite;
+        }
+        
+        .guacamole-status-disconnected {
+            background-color: #dc3545;
+        }
+        
+        .guacamole-close-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 5px;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: background-color 0.2s ease;
+        }
+        
+        .guacamole-close-btn:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        .guacamole-modal-body {
+            padding: 20px;
+        }
+        
+        .guacamole-file-info {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-left: 4px solid #667eea;
+            border-radius: 6px;
+        }
+        
+        .guacamole-file-info h4 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .guacamole-file-info p {
+            margin: 5px 0;
+            color: #666;
+            font-size: 13px;
+        }
+        
+        .guacamole-preview {
+            margin: 15px 0;
+            text-align: center;
+            max-height: 200px;
+            overflow: hidden;
+            border-radius: 6px;
+            background-color: #f8f9fa;
+            display: none;
+        }
+        
+        .guacamole-preview img {
+            max-width: 100%;
+            max-height: 200px;
+            object-fit: contain;
+            border-radius: 4px;
+        }
+        
+        .guacamole-actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+            margin: 20px 0;
+        }
+        
+        .guacamole-actions[data-file-type="pdf"] .guacamole-btn-primary {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+            border-color: #ee5a24;
+            box-shadow: 0 4px 8px rgba(255, 107, 107, 0.3);
+            order: -1; /* Make print button first */
+        }
+        
+        .guacamole-actions[data-file-type="pdf"] .guacamole-btn-primary:hover {
+            background: linear-gradient(135deg, #ee5a24 0%, #dc5f2a 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(255, 107, 107, 0.4);
+        }
+        
+        .guacamole-btn {
+            padding: 12px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            text-decoration: none;
+        }
+        
+        .guacamole-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        
+        .guacamole-btn-primary {
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            color: white;
+            font-weight: 600;
+            border: 2px solid #16a34a;
+            box-shadow: 0 4px 8px rgba(34, 197, 94, 0.3);
+        }
+        
+        .guacamole-btn-primary:hover {
+            background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(34, 197, 94, 0.4);
+        }
+        
+        .guacamole-btn-secondary {
+            background-color: #e9ecef;
+            color: #495057;
+            border: 1px solid #dee2e6;
+        }
+        
+        .guacamole-btn-secondary:hover {
+            background-color: #dee2e6;
+            border-color: #adb5bd;
+        }
+        
+        .guacamole-btn-cancel {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .guacamole-btn-cancel:hover {
+            background-color: #f1b0b7;
+            border-color: #e1a3a8;
+        }
+        
+        .guacamole-progress {
+            margin-top: 15px;
+            display: none;
+        }
+        
+        .guacamole-progress-bar {
+            height: 6px;
+            background-color: #e9ecef;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        
+        .guacamole-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s ease-out;
+            border-radius: 3px;
+        }
+        
+        .guacamole-progress-text {
+            font-size: 12px;
+            color: #666;
+            text-align: center;
+            margin-top: 5px;
+        }
+        
+        .guacamole-remember-choice {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #e7f3ff;
+            border-radius: 6px;
+            border: 1px solid #b3d9ff;
+            display: none;
+        }
+        
+        .guacamole-remember-choice label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            color: #0066cc;
+            font-size: 13px;
+        }
+        
+        .guacamole-remember-choice input[type="checkbox"] {
+            margin-right: 8px;
+        }
+        
+        .guacamole-print-modal.guacamole-modal-show {
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .guacamole-notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: #28a745;
+            color: white;
+            padding: 12px 16px;
+            border-radius: 4px;
+            z-index: 10000;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            font-size: 14px;
+            animation: slideIn 0.3s ease-out;
+            max-width: 300px;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes pulse {
+            0% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+            100% {
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🖥️ Guacamole Remote Desktop</h1>
+            <p>Enhanced with embedded print agent capabilities</p>
+        </div>
+        
+        <div class="client-list" id="client-list">
+            <!-- Client connections will be populated here -->
+        </div>
+        
+        <div class="print-status" id="print-status" style="display: none;">
+            <div class="print-status-title">Print Agent Status</div>
+            <div class="print-status-message" id="print-status-message"></div>
+        </div>
+        
+        <!-- Embedded print agent modal -->
+        <div class="guacamole-print-modal" id="guacamole-print-modal">
+            <div class="guacamole-modal-content">
+                <div class="guacamole-modal-header">
+                    <h3>🖨️ Guacamole File Action</h3>
+                    <span class="guacamole-status-indicator guacamole-status-disconnected" id="guacamole-status"></span>
+                    <button class="guacamole-close-btn" onclick="window.guacamolePrintAgent.hideModal()">&times;</button>
+                </div>
+                <div class="guacamole-modal-body">
+                    <div class="guacamole-file-info">
+                        <h4 id="guacamole-file-name">Select Action</h4>
+                        <p id="guacamole-file-size"></p>
+                        <p id="guacamole-file-type"></p>
+                        <div id="guacamole-preview"></div>
+                    </div>
+                    <div class="guacamole-actions" id="guacamole-actions">
+                        <button class="guacamole-btn guacamole-btn-primary" data-action="print">
+                            🖨️ Print
+                        </button>
+                        <button class="guacamole-btn guacamole-btn-secondary" data-action="download">
+                            💾 Download
+                        </button>
+                        <button class="guacamole-btn guacamole-btn-secondary" data-action="open">
+                            📂 Open
+                        </button>
+                        <button class="guacamole-btn guacamole-btn-cancel" data-action="cancel">
+                            ❌ Cancel
+                        </button>
+                    </div>
+                    <div class="guacamole-progress">
+                        <div class="guacamole-progress-bar">
+                            <div class="guacamole-progress-fill" id="guacamole-progress-fill" style="width: 0%;"></div>
+                        </div>
+                        <span class="guacamole-progress-text" id="guacamole-progress-text">0%</span>
+                    </div>
+                    <div class="guacamole-remember-choice">
+                        <label>
+                            <input type="checkbox" id="guacamole-remember-action">
+                            Remember my choice for this file type
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Embed the print agent client JavaScript with CORRECT path
+        const script = document.createElement('script');
+        script.type = 'text/javascript';
+        script.src = 'print-agent-client.js';
+        script.async = true;
+        
+        script.onload = function() {
+            console.log('Guacamole Print Agent client JavaScript loaded');
+            if (window.guacamolePrintAgent && typeof window.guacamolePrintAgent.init === 'function') {
+                window.guacamolePrintAgent.init();
+            }
+        };
+        
+        script.onerror = function() {
+            console.error('Failed to load Guacamole Print Agent client');
+        };
+        
+        document.head.appendChild(script);
+        
+        // Initialize connection status check
+        function checkConnectionStatus() {
+            const statusEl = document.getElementById('guacamole-status');
+            const messageEl = document.getElementById('guacamole-status-message');
+            
+            if (statusEl && messageEl && window.guacamolePrintAgent) {
+                if (window.guacamolePrintAgent.status === 'connected') {
+                    statusEl.className = 'guacamole-status-indicator guacamole-status-connected';
+                    messageEl.textContent = 'Connected to local print agent';
+                } else if (window.guacamolePrintAgent.status === 'connecting') {
+                    statusEl.className = 'guacamole-status-indicator guacamole-status-connecting';
+                    messageEl.textContent = 'Connecting to local print agent...';
+                } else {
+                    statusEl.className = 'guacamole-status-indicator guacamole-status-disconnected';
+                    messageEl.textContent = 'Disconnected from local agent';
+                }
+                
+                // Show/hide print status section
+                const printStatusEl = document.getElementById('print-status');
+                if (printStatusEl) {
+                    printStatusEl.style.display = 'block';
+                } else {
+                    printStatusEl.style.display = 'none';
+                }
+            }
+        }
+        
+        // Check connection status every 5 seconds
+        setInterval(checkConnectionStatus, 5000);
+        
+        // Page visibility handling - disconnect when page is hidden
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden && window.guacamolePrintAgent.status === 'connected') {
+                window.guacamolePrintAgent.connection.close();
+            }
+        });
+        
+        // Global functions for the print agent
+        window.guacamolePrintAgent = {
+            hideModal: function() {
+                const modal = document.getElementById('guacamole-print-modal');
+                if (modal) {
+                    modal.classList.remove('guacamole-modal-show');
+                    
+                    // Reset progress
+                    const progressFill = document.getElementById('guacamole-progress-fill');
+                    const progressText = document.getElementById('guacamole-progress-text');
+                    if (progressFill) {
+                        progressFill.style.width = '0%';
+                        progressText.textContent = '0%';
+                    }
+                }
+            },
+            
+            showModal: function(fileName, fileType, fileContent) {
+                const fileNameEl = document.getElementById('guacamole-file-name');
+                const fileSizeEl = document.getElementById('guacamole-file-size');
+                const fileTypeEl = document.getElementById('guacamole-file-type');
+                const previewEl = document.getElementById('guacamole-preview');
+                const actionsEl = document.getElementById('guacamole-actions');
+                
+                fileNameEl.textContent = fileName || 'Unknown file';
+                
+                // Update file type attribute for styling
+                if (actionsEl) {
+                    if (fileType === 'application/pdf') {
+                        actionsEl.setAttribute('data-file-type', 'pdf');
+                        console.log('Set PDF file type for actions');
+                    } else {
+                        actionsEl.removeAttribute('data-file-type');
+                    }
+                }
+                
+                if (fileContent) {
+                    const fileSize = fileContent.length;
+                    fileSizeEl.textContent = 'Size: ' + window.guacamolePrintAgent.formatFileSize(fileSize);
+                    
+                    // Show preview if it's an image or PDF
+                    if (fileType && (fileType.includes('image/') || fileType === 'application/pdf')) {
+                        previewEl.innerHTML = `<img src="data:${fileType};base64,${fileContent}" style="max-width: 100%; max-height: 100%; object-fit: contain;">`;
+                        previewEl.style.display = 'block';
+                    } else {
+                        previewEl.style.display = 'none';
+                    }
+                } else {
+                    fileSizeEl.textContent = 'Size: Unknown';
+                    previewEl.style.display = 'none';
+                }
+                
+                if (fileType) {
+                    fileTypeEl.textContent = 'Type: ' + fileType;
+                } else {
+                    fileTypeEl.textContent = 'Type: Unknown';
+                }
+                
+                const modal = document.getElementById('guacamole-print-modal');
+                modal.style.display = 'flex';
+                modal.classList.add('guacamole-modal-show');
+                
+                // For PDFs, automatically highlight the print option
+                if (fileType === 'application/pdf') {
+                    window.guacamolePrintAgent.showMessage('PDF detected - Use Print button to send to printer', 'info');
+                }
+            },
+            
+            executeAction: function(action) {
+                const activeTransfer = window.guacamolePrintAgent.activeTransfer;
+                if (!activeTransfer) {
+                    console.warn('No active transfer to execute action:', action);
+                    window.guacamolePrintAgent.hideModal();
+                    return;
+                }
+                
+                activeTransfer.action = action;
+                window.guacamolePrintAgent.updateProgress(10);
+                
+                // Simulate sending to local print agent (for demo)
+                setTimeout(() => {
+                    window.guacamolePrintAgent.updateProgress(50);
+                    setTimeout(() => {
+                        window.guacamolePrintAgent.updateProgress(90);
+                        setTimeout(() => {
+                            window.guacamolePrintAgent.updateProgress(100);
+                            setTimeout(() => {
+                                window.guacamolePrintAgent.hideModal();
+                                window.guacamolePrintAgent.showMessage('File processed successfully!', 'success');
+                            }, 500);
+                        }, 500);
+                    }, 500);
+                }, 500);
+            },
+            
+            updateProgress: function(percent) {
+                const progressFill = document.getElementById('guacamole-progress-fill');
+                const progressText = document.getElementById('guacamole-progress-text');
+                
+                if (progressFill) {
+                    progressFill.style.width = percent + '%';
+                    progressText.textContent = percent + '%';
+                }
+                
+                if (percent >= 100) {
+                    setTimeout(() => {
+                        window.guacamolePrintAgent.hideModal();
+                    }, 1000);
+                }
+            },
+            
+            showMessage: function(message, type) {
+                // Update status indicator
+                if (window.guacamolePrintAgent.status === 'connected') {
+                    return; // Status indicator already shows connection status
+                }
+                
+                // Update modal if it's shown
+                const modal = document.getElementById('guacamole-print-modal');
+                if (modal && modal.style.display !== 'none') {
+                    const modalBody = modal.querySelector('.guacamole-modal-body');
+                    const fileInfoEl = modalBody.querySelector('.guacamole-file-info');
+                    
+                    // Create notification instead
+                    const notification = document.createElement('div');
+                    notification.className = 'guacamole-notification';
+                    notification.textContent = message;
+                    notification.style.cssText = `
+                        position: fixed;
+                        top: 20px;
+                        right: 20px;
+                        background-color: ${type === 'success' ? '#28a745' : type === 'error' ? '#dc3545' : '#ffc107'};
+                        color: white;
+                        padding: 10px 15px;
+                        border-radius: 4px;
+                        z-index: 10000;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+                        font-size: 14px;
+                        animation: slideIn 0.3s ease-out;
+                        max-width: 300px;
+                    `;
+                    
+                    document.body.appendChild(notification);
+                    
+                    // Auto-remove after 5 seconds
+                    setTimeout(() => {
+                        if (notification.parentNode) {
+                            notification.parentNode.removeChild(notification);
+                        }
+                    }, 5000);
+                }
+            },
+            
+            formatFileSize: function(bytes) {
+                if (bytes < 1000000) return Math.round(bytes / 1024) + ' KB';
+                return Math.round(bytes / (1024 * 1024)) + ' MB';
+            },
+            
+            getFileType: function(fileName) {
+                const extension = fileName.split('.').pop().toLowerCase();
+                const typeMap = {
+                    'pdf': 'application/pdf',
+                    'doc': 'application/msword',
+                    'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    'xls': 'application/vnd.ms-excel',
+                    'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    'jpg': 'image/jpeg',
+                    'jpeg': 'image/jpeg',
+                    'png': 'image/png',
+                    'txt': 'text/plain',
+                    'index.html': 'text/html',
+                    'zip': 'application/zip',
+                    'rar': 'application/x-rar-compressed'
+                };
+                return typeMap[extension] || 'application/octet-stream';
+            },
+            
+            status: 'disconnected',
+            connection: null
+        };
+        
+        // Initialize the connection status check
+        checkConnectionStatus();
+        
+        // Initialize Guacamole WebSocket Tunnel
+        function initGuacamole() {
+            Guacamole.init(function(tunnel) {
+                console.log('Guacamole WebSocket tunnel established');
+                
+                tunnel.onstatechange = function(state) {
+                    if (state === Guacamole.State.CONNECTED) {
+                        window.guacamolePrintAgent.status = 'connected';
+                        window.guacamolePrintAgent.connection = tunnel;
+                        checkConnectionStatus();
+                        console.log('Print agent connected to Guacamole');
+                        
+                        // Show client list
+                        refreshClientList();
+                    }
+                };
+                
+                tunnel.onstatechange = function(state) {
+                    if (state === Guacamole.State.CLOSED) {
+                        window.guacamolePrintAgent.status = 'disconnected';
+                        window.guacamolePrintAgent.connection = null;
+                        console.log('Print agent disconnected from Guacamole');
+                    }
+                };
+            });
+        }
+        
+        // Add new client to the list
+        function addClient(clientId, username) {
+            const clientList = document.getElementById('client-list');
+            
+            const clientCard = document.createElement('div');
+            clientCard.className = 'client-card';
+            clientCard.innerHTML = `
+                <div class="client-name">${username}</div>
+                <div class="client-status">Connecting...</div>
+            `;
+            
+            clientCard.onclick = function() {
+                // Simulate connecting to this client
+                console.log('Connecting to client:', username);
+                
+                const statusEl = clientCard.querySelector('.client-status');
+                statusEl.className = 'client-status connecting-spinner';
+                statusEl.textContent = 'Connecting...';
+                
+                setTimeout(() => {
+                    statusEl.className = 'client-status status-connected';
+                    statusEl.textContent = 'Connected';
+                }, 2000);
+            };
+            
+            clientList.appendChild(clientCard);
+        }
+        
+        // Refresh client list
+        function refreshClientList() {
+            const clientList = document.getElementById('client-list');
+            clientList.innerHTML = '';
+            
+            Guacamole.getTunnels().forEach(function(tunnel) {
+                tunnel.getConnectedClients().forEach(function(client) {
+                    addClient(client.getTunnelSession().getUUID().toString(), client.getAuthenticatedUser().getUsername());
+                });
+            });
+        }
+        
+        // Check if there's a tunnel with print agent extension
+        function checkForPrintAgentExtension() {
+            setTimeout(() => {
+                Guacamole.getTunnels().forEach(function(tunnel) {
+                    const clients = tunnel.getConnectedClients();
+                    for (let i = 0; i < clients.length; i++) {
+                        const client = clients[i];
+                        const extensions = tunnel.getTunnelSession().getExtensions();
+                        
+                        // Check if our print agent extension is loaded
+                        for (let j = 0; j < extensions.size(); j++) {
+                            if (extensions.contains('org.apache.guacamole.printagent.extension.PrintAgentExtension')) {
+                                console.log('Found client with print agent extension');
+                                addClient(client.getTunnelSession().getUUID().toString(), client.getAuthenticatedUser().getUsername());
+                                return;
+                            }
+                        }
+                    }
+                });
+            });
+        }
+        
+        // Check connection status every 10 seconds
+        setInterval(checkForPrintAgentExtension, 10000);
+        
+        // Initialize Guacamole when ready
+        Guacamole.onstatechange = function(state) {
+            if (state == Guacamole.State.READY) {
+                console.log('Guacamole is ready, checking for print agent...');
+                
+                // Create tunnel for print agent
+                var printAgentTunnel = new Guacamole.Tunnel({
+                    'GUACAMOLE_PRINT_AGENT': {
+                        'onTunnel': function(tunnel) {
+                            console.log('Print agent tunnel created');
+                            return tunnel.getUUID();
+                        },
+                        'onTunnelStateChange': function() {
+                            // Handle tunnel state changes
+                        }
+                    }
+                });
+                
+                printAgentTunnel.connect();
+            }
+        };
+        
+        console.log('Guacamole client ready');
+    </script>
+</body>
+</html>

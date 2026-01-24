@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Extension Debug Test</title>
+    <meta charset="UTF-8">
+    <script src="js/print-agent-client.js"></script>
+    <link rel="stylesheet" href="css/print-agent.css">
+</head>
+<body>
+    <h1>Extension Debug Test</h1>
+    <div id="debug-info">
+        <p>Checking if extension is loading...</p>
+    </div>
+    
+    <button onclick="debugExtension()" style="background: #ff6b6b; color: white; padding: 15px 30px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; margin: 10px;">
+        &#x1F6D; Debug Extension
+    </button>
+    
+    <button onclick="forceShowModal()" style="background: #22c55e; color: white; padding: 15px 30px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; margin: 10px;">
+        &#x1F9F; Force Show Modal
+    </button>
+    
+    <script>
+        function debugExtension() {
+            const debugInfo = document.getElementById('debug-info');
+            let html = '<h3>Extension Debug Information:</h3>';
+            
+            // Check if global object exists
+            if (typeof window.guacamolePrintAgent !== 'undefined') {
+                html += '✅ window.guacamolePrintAgent exists<br>';
+                
+                // Check methods
+                const methods = ['init', 'showModal', 'setupUI', 'hideModal'];
+                methods.forEach(method => {
+                    if (typeof window.guacamolePrintAgent[method] === 'function') {
+                        html += `✅ ${method} method exists<br>`;
+                    } else {
+                        html += `❌ ${method} method missing<br>`;
+                    }
+                });
+                
+                // Check modal existence
+                const modal = document.getElementById('guacamole-print-modal');
+                if (modal) {
+                    html += '✅ Modal element exists<br>';
+                    html += `Modal styles: display=${modal.style.display}, classes=${modal.className}<br>`;
+                } else {
+                    html += '❌ Modal element NOT found<br>';
+                }
+                
+            } else {
+                html += '❌ window.guacamolePrintAgent NOT found<br>';
+            }
+            
+            debugInfo.innerHTML = html;
+        }
+        
+        function forceShowModal() {
+            try {
+                console.log('Force showing modal...');
+                
+                // Try to create modal if it doesn't exist
+                if (typeof window.guacamolePrintAgent !== 'undefined') {
+                    if (typeof window.guacamolePrintAgent.setupUI === 'function') {
+                        console.log('Creating modal...');
+                        window.guacamolePrintAgent.setupUI();
+                    }
+                    
+                    if (typeof window.guacamolePrintAgent.showModal === 'function') {
+                        console.log('Showing modal...');
+                        window.guacamolePrintAgent.showModal(
+                            'force-test.pdf',
+                            'application/pdf',
+                            null
+                        );
+                    } else {
+                        alert('showModal method not found');
+                    }
+                } else {
+                    alert('Extension not loaded - check console for errors');
+                }
+            } catch (error) {
+                console.error('Error forcing modal:', error);
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        // Auto-debug on page load
+        window.onload = function() {
+            console.log('Debug page loaded');
+            setTimeout(debugExtension, 1000); // Give extension time to initialize
+        };
+    </script>
+</body>
+</html>

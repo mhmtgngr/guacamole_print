@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guacamole Print Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .test-button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        .test-button:hover {
+            background-color: #0056b3;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+    </style>
+</head>
+<body>
+    <h1>Guacamole Print Agent Test</h1>
+    
+    <div id="status" class="status info">
+        Testing connection to local print agent...
+    </div>
+    
+    <button class="test-button" onclick="testConnection()">Test WebSocket Connection</button>
+    <button class="test-button" onclick="testPrintJob()">Send Test Print Job</button>
+    <button class="test-button" onclick="testStatus()">Check Agent Status</button>
+    
+    <div id="results"></div>
+    
+    <script>
+        let ws = null;
+        
+        function updateStatus(message, type = 'info') {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+        }
+        
+        function addResult(message, type = 'info') {
+            const resultsEl = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `status ${type}`;
+            div.innerHTML = `<strong>${new Date().toLocaleTimeString()}:</strong> ${message}`;
+            resultsEl.appendChild(div);
+        }
+        
+        function connectWebSocket() {
+            try {
+                ws = new WebSocket('ws://localhost:8181/ws');
+                
+                ws.onopen = function() {
+                    updateStatus('Connected to local print agent!', 'success');
+                    addResult('WebSocket connection established', 'success');
+                };
+                
+                ws.onmessage = function(event) {
+                    const message = JSON.parse(event.data);
+                    addResult(`Received: ${message.type} - ${message.message || JSON.stringify(message)}`, 'info');
+                };
+                
+                ws.onclose = function() {
+                    updateStatus('Disconnected from local print agent', 'error');
+                    addResult('WebSocket connection closed', 'error');
+                };
+                
+                ws.onerror = function(error) {
+                    updateStatus('WebSocket error', 'error');
+                    addResult(`WebSocket error: ${error}`, 'error');
+                };
+            } catch (error) {
+                updateStatus(`Failed to connect: ${error.message}`, 'error');
+                addResult(`Connection error: ${error.message}`, 'error');
+            }
+        }
+        
+        function testConnection() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                addResult('Already connected', 'info');
+                return;
+            }
+            
+            updateStatus('Connecting to WebSocket...', 'info');
+            connectWebSocket();
+        }
+        
+        function testPrintJob() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                addResult('Please connect first', 'error');
+                return;
+            }
+            
+            const printJob = {
+                messageId: 'test_' + Date.now(),
+                type: 'file_transfer',
+                file: {
+                    name: 'test-document.pdf',
+                    type: 'application/pdf',
+                    size: 1024,
+                    content: btoa('Test PDF content for printing'),
+                    availableActions: ['print', 'download', 'open']
+                },
+                metadata: {
+                    userName: 'test-user',
+                    sessionId: 'test-session',
+                    source: 'test-webpage',
+                    timestamp: new Date().toISOString()
+                }
+            };
+            
+            ws.send(JSON.stringify(printJob));
+            addResult('Sent test print job', 'success');
+        }
+        
+        function testStatus() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                addResult('Please connect first', 'error');
+                return;
+            }
+            
+            const statusRequest = {
+                messageId: 'status_' + Date.now(),
+                type: 'status_query'
+            };
+            
+            ws.send(JSON.stringify(statusRequest));
+            addResult('Sent status query', 'info');
+        }
+        
+        // Auto-connect on page load
+        window.onload = function() {
+            setTimeout(connectWebSocket, 1000);
+        };
+    </script>
+</body>
+</html>

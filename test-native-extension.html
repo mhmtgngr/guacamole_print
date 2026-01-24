@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guacamole Native Extension Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f5f5f5;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .test-section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid #e1e4e8;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .status {
+            padding: 10px 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-weight: 500;
+        }
+        
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .status.connecting {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            margin: 5px;
+            transition: background-color 0.2s ease;
+        }
+        
+        button:hover {
+            background: #0056b3;
+        }
+        
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        
+        .file-list {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            max-height: 200px;
+            overflow-y: auto;
+            padding: 10px;
+        }
+        
+        .file-item {
+            padding: 8px;
+            border-bottom: 1px solid #f1f3f4;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        
+        .file-item:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .file-item.selected {
+            background-color: #e3f2fd;
+            border-color: #0066cc;
+        }
+    </style>
+</head>
+<body>
+    <h1>🖥️ Guacamole Native Extension Test</h1>
+    <p>This page simulates the Guacamole environment with the native print agent extension embedded.</p>
+    
+    <div class="test-section">
+        <h2>Connection Status</h2>
+        <div id="connection-status" class="status disconnected">Checking...</div>
+        
+        <div style="margin-top: 15px;">
+            <button id="test-connection" onclick="testWebSocketConnection()">
+                Test WebSocket Connection
+            </button>
+            <button id="send-print-job" onclick="sendTestPrintJob()" disabled>
+                Send Test Print Job
+            </button>
+            <button id="clear-logs" onclick="clearLogs()">
+                Clear Logs
+            </button>
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test Files</h2>
+        <div class="file-list" id="file-list">
+            <div class="file-item" data-file="test-document.pdf" data-type="application/pdf">
+                📄 test-document.pdf (PDF, 2.5MB)
+            </div>
+            <div class="file-item" data-file="spreadsheet.xlsx" data-type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+                📊 spreadsheet.xlsx (Excel, 1.2MB)
+            </div>
+            <div class="file-item" data-file="image.png" data-type="image/png">
+                🖼️ image.png (PNG, 800KB)
+            </div>
+            <div class="file-item" data-file="document.txt" data-type="text/plain">
+                📝 document.txt (Text, 5KB)
+            </div>
+        </div>
+        <p style="margin-top: 10px; color: #666;">
+            Click a file to select it, then click "Send Test Print Job" to simulate printing.
+        </p>
+    </div>
+    
+    <div class="test-section">
+        <h2>Activity Log</h2>
+        <div class="log" id="activity-log">Initializing test environment...</div>
+    </div>
+    
+    <script>
+        // Global configuration
+        const CONFIG = {
+            WS_URL: 'ws://localhost:8181/ws',
+            MAX_FILE_SIZE: 50 * 1024 * 1024, // 50MB
+            ALLOWED_TYPES: ['.pdf', '.xlsx', '.xls', '.docx', '.doc', '.jpg', '.jpeg', '.png', '.txt', '.zip', '.rar']
+        };
+        
+        // Global state
+        let websocket = null;
+        let selectedFile = null;
+        let connectionStatus = 'disconnected';
+        
+        // Initialize on page load
+        window.onload = function() {
+            initializeTestEnvironment();
+            setupFileSelection();
+            updateConnectionStatus();
+        };
+        
+        function initializeTestEnvironment() {
+            log('🚀 Initializing Guacamole Native Extension Test Environment');
+            log('📡 WebSocket URL: ' + CONFIG.WS_URL);
+            log('📋 Testing print agent integration without browser extension');
+            
+            // Simulate Guacamole environment
+            simulateGuacamoleEnvironment();
+        }
+        
+        function simulateGuacamoleEnvironment() {
+            // Create mock Guacamole object
+            window.Guacamole = {
+                State: {
+                    CONNECTED: 'connected',
+                    CONNECTING: 'connecting',
+                    DISCONNECTED: 'disconnected',
+                    READY: 'ready'
+                },
+                
+                Tunnel: function(config) {
+                    return {
+                        connect: function() {
+                            log('🔗 Simulating Guacamole tunnel connection...');
+                            // Simulate connection delay
+                            setTimeout(() => {
+                                if (typeof this.onstatechange === 'function') {
+                                    this.onstatechange('connected');
+                                }
+                            }, 1000);
+                        },
+                        
+                        sendInstruction: function(instruction) {
+                            log('📤 Simulating instruction: ' + instruction);
+                        },
+                        
+                        onstatechange: null,
+                        onerror: null
+                    };
+                },
+                
+                onstatechange: null
+            };
+            
+            log('✅ Mock Guacamole environment created');
+        }
+        
+        function setupFileSelection() {
+            const fileItems = document.querySelectorAll('.file-item');
+            fileItems.forEach(item => {
+                item.addEventListener('click', function() {
+                    // Remove previous selection
+                    document.querySelectorAll('.file-item').forEach(f => f.classList.remove('selected'));
+                    
+                    // Add selection to clicked item
+                    this.classList.add('selected');
+                    
+                    // Store selected file data
+                    selectedFile = {
+                        name: this.getAttribute('data-file'),
+                        type: this.getAttribute('data-type'),
+                        size: generateFileSize(this.getAttribute('data-file'))
+                    };
+                    
+                    log('📁 Selected file: ' + selectedFile.name + ' (' + formatFileSize(selectedFile.size) + ')');
+                });
+            });
+        }
+        
+        function generateFileSize(fileName) {
+            // Simulate different file sizes based on file name
+            if (fileName.includes('pdf')) return 2.5 * 1024 * 1024;
+            if (fileName.includes('xlsx')) return 1.2 * 1024 * 1024;
+            if (fileName.includes('png')) return 800 * 1024;
+            if (fileName.includes('txt')) return 5 * 1024;
+            return 1024 * 1024; // 1MB default
+        }
+        
+        function testWebSocketConnection() {
+            updateConnectionStatus('connecting');
+            log('🔄 Testing WebSocket connection to ' + CONFIG.WS_URL);
+            
+            try {
+                websocket = new WebSocket(CONFIG.WS_URL);
+                
+                websocket.onopen = function() {
+                    connectionStatus = 'connected';
+                    updateConnectionStatus();
+                    log('✅ WebSocket connection established successfully');
+                    document.getElementById('send-print-job').disabled = false;
+                };
+                
+                websocket.onmessage = function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        log('📨 Received message: ' + JSON.stringify(data, null, 2));
+                        
+                        // Handle different message types
+                        if (data.type === 'connection_established') {
+                            log('🎉 Print agent connection confirmed');
+                        } else if (data.type === 'response') {
+                            if (data.status === 'success') {
+                                log('✅ Print job completed: ' + data.message);
+                            } else {
+                                log('❌ Print job failed: ' + data.message);
+                            }
+                        } else if (data.type === 'error') {
+                            log('⚠️ Error received: ' + data.message);
+                        }
+                    } catch (error) {
+                        log('🔍 Failed to parse message: ' + error.message);
+                    }
+                };
+                
+                websocket.onclose = function(event) {
+                    connectionStatus = 'disconnected';
+                    updateConnectionStatus();
+                    log('❌ WebSocket connection closed: ' + event.code + ' - ' + event.reason);
+                    document.getElementById('send-print-job').disabled = true;
+                };
+                
+                websocket.onerror = function(error) {
+                    connectionStatus = 'error';
+                    updateConnectionStatus();
+                    log('💥 WebSocket error: ' + error.message);
+                    document.getElementById('send-print-job').disabled = true;
+                };
+                
+            } catch (error) {
+                connectionStatus = 'error';
+                updateConnectionStatus();
+                log('💥 Failed to create WebSocket: ' + error.message);
+            }
+        }
+        
+        function sendTestPrintJob() {
+            if (!selectedFile) {
+                log('⚠️ Please select a file first');
+                return;
+            }
+            
+            if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+                log('⚠️ WebSocket not connected. Please test connection first.');
+                return;
+            }
+            
+            log('📤 Sending test print job: ' + selectedFile.name);
+            
+            const printJob = {
+                messageId: 'test_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                type: 'file_transfer',
+                file: {
+                    name: selectedFile.name,
+                    type: selectedFile.type,
+                    size: selectedFile.size,
+                    content: generateTestFileContent(selectedFile),
+                    availableActions: ['print', 'download', 'open']
+                },
+                metadata: {
+                    userName: 'test-user',
+                    sessionId: 'test-session',
+                    source: 'native-extension-test',
+                    timestamp: new Date().toISOString()
+                }
+            };
+            
+            try {
+                websocket.send(JSON.stringify(printJob));
+                log('📨 Print job sent successfully');
+                
+                // Update button state
+                const sendBtn = document.getElementById('send-print-job');
+                sendBtn.disabled = true;
+                sendBtn.textContent = 'Processing...';
+                
+                // Re-enable after 3 seconds
+                setTimeout(() => {
+                    sendBtn.disabled = false;
+                    sendBtn.textContent = 'Send Test Print Job';
+                }, 3000);
+                
+            } catch (error) {
+                log('💥 Failed to send print job: ' + error.message);
+            }
+        }
+        
+        function generateTestFileContent(file) {
+            // Generate base64 content for testing
+            const content = 'Test file content for ' + file.name + ' at ' + new Date().toISOString();
+            return btoa(content);
+        }
+        
+        function updateConnectionStatus() {
+            const statusDiv = document.getElementById('connection-status');
+            statusDiv.className = 'status ' + connectionStatus;
+            
+            switch (connectionStatus) {
+                case 'connected':
+                    statusDiv.textContent = '✅ Connected to Local Print Agent';
+                    break;
+                case 'connecting':
+                    statusDiv.textContent = '🔄 Connecting to Local Print Agent...';
+                    break;
+                case 'error':
+                    statusDiv.textContent = '❌ Connection Error';
+                    break;
+                default:
+                    statusDiv.textContent = '❌ Not Connected to Local Print Agent';
+            }
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' bytes';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+        
+        function log(message) {
+            const logDiv = document.getElementById('activity-log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += timestamp + ': ' + message + '\n';
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function clearLogs() {
+            document.getElementById('activity-log').innerHTML = 'Logs cleared...\n';
+        }
+        
+        // Auto-connection test on page load
+        setTimeout(() => {
+            if (connectionStatus === 'disconnected') {
+                testWebSocketConnection();
+            }
+        }, 2000);
+    </script>
+</body>
+</html>

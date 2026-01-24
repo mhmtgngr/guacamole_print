@@ -1,0 +1,359 @@
+/*
+ * Guacamole Print Agent - Client Side Styles
+ * Styles for the embedded file transfer interface
+ */
+
+.guacamole-print-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    z-index: 9999;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px;
+    align-items: center;
+    justify-content: center;
+}
+
+.guacamole-print-modal.guacamole-modal-show {
+    display: flex !important;
+}
+
+.guacamole-modal-content {
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    max-width: 500px;
+    margin: 50px auto;
+    animation: slideIn 0.3s ease-out;
+}
+
+.guacamole-modal-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 15px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-radius: 8px 8px 0 0;
+    position: relative;
+}
+
+.guacamole-modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.guacamole-status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 10px;
+    display: inline-block;
+}
+
+.guacamole-status-connected {
+    background-color: #28a745;
+}
+
+.guacamole-status-connecting {
+    background-color: #ffc107;
+    animation: pulse 2s infinite;
+}
+
+.guacamole-status-disconnected {
+    background-color: #dc3545;
+}
+
+.guacamole-close-btn {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 5px;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background-color 0.2s ease;
+}
+
+.guacamole-close-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.guacamole-modal-body {
+    padding: 20px;
+}
+
+.guacamole-file-info {
+    margin-bottom: 20px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-left: 4px solid #667eea;
+    border-radius: 6px;
+}
+
+.guacamole-file-info h4 {
+    margin: 0 0 10px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+    word-break: break-all;
+}
+
+.guacamole-file-info p {
+    margin: 5px 0;
+    color: #666;
+    font-size: 13px;
+}
+
+.gacamole-preview {
+    margin: 15px 0;
+    text-align: center;
+    max-height: 200px;
+    overflow: hidden;
+    border-radius: 6px;
+    background-color: #f8f9fa;
+    display: none;
+}
+
+.gacamole-preview img {
+    max-width: 100%;
+    max-height: 200px;
+    object-fit: contain;
+    border-radius: 4px;
+}
+
+.guacamole-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 10px;
+    margin: 20px 0;
+}
+
+/* Special styling for PDF files */
+.guacamole-actions[data-file-type="pdf"] .guacamole-btn-primary {
+    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+    border-color: #ee5a24;
+    box-shadow: 0 4px 8px rgba(255, 107, 107, 0.3);
+    order: -1; /* Make print button first */
+}
+
+.guacamole-actions[data-file-type="pdf"] .guacamole-btn-primary:hover {
+    background: linear-gradient(135deg, #ee5a24 0%, #dc5f2a 100%);
+    box-shadow: 0 6px 16px rgba(255, 107, 107, 0.4);
+}
+
+.guacamole-btn {
+    padding: 12px 16px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    text-decoration: none;
+}
+
+.guacamole-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.guacamole-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.guacamole-btn-primary {
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+    color: white;
+    font-weight: 600;
+    border: 2px solid #16a34a;
+    box-shadow: 0 4px 8px rgba(34, 197, 94, 0.3);
+}
+
+.guacamole-btn-primary:hover {
+    background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(34, 197, 94, 0.4);
+}
+
+.gacamole-btn-secondary {
+    background-color: #e9ecef;
+    color: #495057;
+    border: 1px solid #dee2e6;
+}
+
+.gacamole-btn-secondary:hover {
+    background-color: #dee2e6;
+    border-color: #adb5bd;
+}
+
+.gacamole-btn-cancel {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.guacamole-btn-cancel:hover {
+    background-color: #f1b0b7;
+    border-color: #e1a3a8;
+}
+
+.gacamole-progress {
+    margin-top: 15px;
+    display: none;
+}
+
+.gacamole-progress-bar {
+    height: 6px;
+    background-color: #e9ecef;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.gacamole-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    transition: width 0.3s ease-out;
+    border-radius: 3px;
+}
+
+.gacamole-progress-text {
+    font-size: 12px;
+    color: #666;
+    text-align: center;
+    margin-top: 5px;
+}
+
+.guacamole-remember-choice {
+    margin-top: 15px;
+    padding: 10px;
+    background-color: #e7f3ff;
+    border-radius: 6px;
+    border: 1px solid #b3d9ff;
+    display: none;
+}
+
+.guacamole-remember-choice label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    color: #0066cc;
+    font-size: 13px;
+}
+
+.guacamole-remember-choice input[type="checkbox"] {
+    margin-right: 8px;
+}
+
+.guacamole-notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background-color: #28a745;
+    color: white;
+    padding: 12px 16px;
+    border-radius: 4px;
+    z-index: 10000;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    font-size: 14px;
+    animation: slideIn 0.3s ease-out;
+    max-width: 300px;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes pulse {
+    0% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+    100% {
+        opacity: 1;
+    }
+}
+
+/* Responsive design */
+@media (max-width: 600px) {
+    .guacamole-modal-content {
+        margin: 20px;
+        max-width: 95%;
+    }
+    
+    .guacamole-actions {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+    
+    .guacamole-btn {
+        min-height: 48px;
+        font-size: 16px;
+    }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    .guacamole-modal-content {
+        background-color: #2d3748;
+        color: #e2e8f0;
+    }
+    
+    .guacamole-file-info {
+        background-color: #4a5568;
+        border-left-color: #9f7aea;
+    }
+    
+    .guacamole-file-info h4 {
+        color: #f7fafc;
+    }
+    
+    .guacamole-file-info p {
+        color: #cbd5e0;
+    }
+    
+    .guacamole-preview {
+        background-color: #4a5568;
+    }
+    
+    .guacamole-progress-bar {
+        background-color: #4a5568;
+    }
+    
+    .guacamole-progress-text {
+        color: #cbd5e0;
+    }
+    
+    .guacamole-remember-choice {
+        background-color: #2c5282;
+        border-color: #718096;
+    }
+    
+    .guacamole-remember-choice label {
+        color: #90cdf4;
+    }
+}

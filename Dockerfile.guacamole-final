@@ -1,0 +1,11 @@
+FROM guacamole/guacamole:1.5.5
+
+# Copy print extension resources
+COPY guacamole-extension-module/src/main/resources/js/print-agent-client.js /opt/guacamole/webapp/
+COPY guacamole-extension-module/src/main/resources/css/print-agent.css /opt/guacamole/webapp/
+
+# Replace the default index.html with our enhanced version that includes print extension
+COPY guacamole-extension-module/src/main/resources/index.html /opt/guacamole/webapp/WEB-INF/index.html
+
+# Expose port 8080
+EXPOSE 8080
