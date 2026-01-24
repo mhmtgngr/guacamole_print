@@ -1,200 +1,286 @@
-// Simple file interception - ZIP truncation detection only
-// Version 2.0 - Simplified for reliability
+// Guacamole Print/File Interception
+// Version 3.0 - Fixed: intercepts onfile at instance level (onprint doesn't exist in Guacamole)
+// Print jobs from RDP arrive as onfile events with application/pdf mimetype
 
-console.log('🚀 INITIALIZING FILE INTERCEPTION...');
-
-var originalOnFile = null;
-
-// Repair corrupted ZIP files by rebuilding central directory from local file headers
-function repairZipFile(zipData, filename) {
-    console.log('🔧 Starting ZIP repair for ' + filename + ' (' + zipData.length + ' bytes)');
-    
-    var entries = [];
-    var pos = 0;
-    
-    // Scan for local file headers (PK\x03\x04)
-    while (pos < zipData.length - 30) {
-        if (zipData[pos] === 0x50 && zipData[pos+1] === 0x4B &&
-            zipData[pos+2] === 0x03 && zipData[pos+3] === 0x04) {
-            
-            // Read local file header
-            var compressedSize = zipData[pos + 18] | (zipData[pos + 19] << 8) |
-                                (zipData[pos + 20] << 16) | (zipData[pos + 21] << 24);
-            var uncompressedSize = zipData[pos + 22] | (zipData[pos + 23] << 8) |
-                                  (zipData[pos + 24] << 16) | (zipData[pos + 25] << 24);
-            var nameLen = zipData[pos + 26] | (zipData[pos + 27] << 8);
-            var extraLen = zipData[pos + 28] | (zipData[pos + 29] << 8);
-            var headerSize = 30 + nameLen + extraLen;
-            
-            // Get filename
-            var nameBytes = zipData.subarray(pos + 30, pos + 30 + nameLen);
-            var filenameEntry = '';
-            for (var i = 0; i < nameLen; i++) {
-                filenameEntry += String.fromCharCode(nameBytes[i]);
-            }
-            
-            console.log('📦 Found entry: ' + filenameEntry + ' at ' + pos + 
-                        ', compressed: ' + compressedSize + ', header: ' + headerSize);
-            
-            entries.push({
-                name: filenameEntry,
-                offset: pos,
-                compressedSize: compressedSize,
-                uncompressedSize: uncompressedSize,
-                headerSize: headerSize
-            });
-            
-            pos += headerSize + compressedSize;
-        } else {
-            pos++;
-        }
-    }
-    
-    if (entries.length === 0) {
-        console.log('❌ No ZIP entries found');
-        return null;
-    }
-    
-    console.log('✅ Found ' + entries.length + ' ZIP entries');
-    
-    // Build central directory
-    var cdData = [];
-    var cdOffset = 0;
-    
-    for (var i = 0; i < entries.length; i++) {
-        var e = entries[i];
-        
-        // Central directory header (46 bytes + name + extra + comment)
-        var cdHeader = new Uint8Array(46 + e.name.length);
-        cdHeader.set([0x50, 0x4B, 0x01, 0x02], 0);  // Signature
-        cdHeader.set([20, 0], 4);  // Version needed
-        cdHeader.set([0, 0, 0, 0], 6);  // General purpose
-        cdHeader.set([8, 0], 10);  // Compression method (deflate)
-        cdHeader.set([0, 0], 12);  // Last mod time
-        cdHeader.set([0, 0, 14]);  // Last mod date
-        
-        // CRC32, sizes (placeholder, should read from local header)
-        for (var j = 0; j < 12; j++) {
-            cdHeader[16 + j] = zipData[e.offset + 14 + j];
-        }
-        
-        // Filename length
-        cdHeader[28] = e.name.length & 0xFF;
-        cdHeader[29] = (e.name.length >> 8) & 0xFF;
-        
-        // Extra and comment length (0)
-        cdHeader[30] = 0;
-        cdHeader[31] = 0;
-        cdHeader[32] = 0;
-        cdHeader[33] = 0;
-        
-        // Disk number start, internal/external attrs (0)
-        for (var j = 0; j < 8; j++) {
-            cdHeader[34 + j] = 0;
-        }
-        
-        // Local header offset
-        cdHeader[42] = e.offset & 0xFF;
-        cdHeader[43] = (e.offset >> 8) & 0xFF;
-        cdHeader[44] = (e.offset >> 16) & 0xFF;
-        cdHeader[45] = (e.offset >> 24) & 0xFF;
-        
-        // Copy filename
-        for (var j = 0; j < e.name.length; j++) {
-            cdHeader[46 + j] = e.name.charCodeAt(j);
-        }
-        
-        // Add to central directory
-        for (var j = 0; j < cdHeader.length; j++) {
-            cdData.push(cdHeader[j]);
-        }
-        
-        cdOffset += cdHeader.length;
-    }
-    
-    console.log('📋 Central directory size: ' + cdData.length + ' bytes at offset ' + cdOffset);
-    
-    // Calculate end of central directory position
-    var eocdPos = zipData.length;
-    var cd = new Uint8Array(cdData);
-    
-    // Create new ZIP with valid structure
-    var newZipSize = zipData.length + cdData.length + 22;
-    var newZip = new Uint8Array(newZipSize);
-    
-    // Copy original data
-    newZip.set(zipData, 0);
-    
-    // Copy central directory
-    newZip.set(cd, zipData.length);
-    
-    // End of central directory record
-    var eocd = new Uint8Array(22);
-    eocd.set([0x50, 0x4B, 0x05, 0x06], 0);  // Signature
-    eocd.set([0, 0], 4);  // Disk number
-    eocd.set([0, 0], 6);  // Start disk
-    eocd[8] = entries.length & 0xFF;
-    eocd[9] = (entries.length >> 8) & 0xFF;
-    eocd[10] = entries.length & 0xFF;
-    eocd[11] = (entries.length >> 8) & 0xFF;
-    
-    var cdSize = cdData.length;
-    eocd[12] = cdSize & 0xFF;
-    eocd[13] = (cdSize >> 8) & 0xFF;
-    eocd[14] = (cdSize >> 16) & 0xFF;
-    eocd[15] = (cdSize >> 24) & 0xFF;
-    
-    var cdOff = zipData.length;
-    eocd[16] = cdOff & 0xFF;
-    eocd[17] = (cdOff >> 8) & 0xFF;
-    eocd[18] = (cdOff >> 16) & 0xFF;
-    eocd[19] = (cdOff >> 24) & 0xFF;
-    
-    eocd[20] = 0;  // Comment length
-    eocd[21] = 0;
-    
-    newZip.set(eocd, zipData.length + cdData.length);
-    
-    console.log('✅ ZIP repair complete! New size: ' + newZipSize + ' bytes');
-    
-    return { data: newZip, size: newZipSize };
-}
-
-// Monkey patch Guacamole client to intercept onfile
 (function() {
-    var Guacamole = window.Guacamole;
-    if (!Guacamole) {
-        console.log('❌ Guacamole not available');
-        return;
+    'use strict';
+
+    console.log('[PrintAgent] Initializing file/print interception...');
+
+    // ===== CONFIGURATION =====
+    var AGENT_CONFIG = {
+        wsUrl: 'ws://localhost:8181/ws',
+        reconnectInterval: 5000,
+        maxReconnectAttempts: 10
+    };
+
+    // ===== WEBSOCKET CONNECTION =====
+    var websocket = null;
+    var reconnectAttempts = 0;
+    var reconnectTimer = null;
+
+    function connectWebSocket() {
+        if (websocket && websocket.readyState === WebSocket.OPEN) {
+            return;
+        }
+
+        try {
+            websocket = new WebSocket(AGENT_CONFIG.wsUrl);
+        } catch (e) {
+            console.log('[PrintAgent] WebSocket creation failed:', e.message);
+            scheduleReconnect();
+            return;
+        }
+
+        websocket.onopen = function() {
+            reconnectAttempts = 0;
+            console.log('[PrintAgent] Connected to print agent');
+        };
+
+        websocket.onerror = function() {
+            console.log('[PrintAgent] WebSocket error');
+        };
+
+        websocket.onclose = function() {
+            console.log('[PrintAgent] Disconnected from print agent');
+            scheduleReconnect();
+        };
+
+        websocket.onmessage = function(event) {
+            try {
+                var msg = JSON.parse(event.data);
+                console.log('[PrintAgent] Message:', msg.type, msg.status || '');
+            } catch (e) {
+                // ignore
+            }
+        };
     }
 
-    var proto = Guacamole.Client.prototype;
-    if (!proto) {
-        return;
+    function scheduleReconnect() {
+        if (reconnectTimer) return;
+        if (reconnectAttempts >= AGENT_CONFIG.maxReconnectAttempts) {
+            console.log('[PrintAgent] Max reconnect attempts reached');
+            return;
+        }
+        reconnectAttempts++;
+        reconnectTimer = setTimeout(function() {
+            reconnectTimer = null;
+            connectWebSocket();
+        }, AGENT_CONFIG.reconnectInterval);
     }
 
-    var originalOnFile = proto.onfile;
+    function isWebSocketReady() {
+        return websocket && websocket.readyState === WebSocket.OPEN;
+    }
 
-    proto.onfile = function(stream, mimetype, filename) {
-        console.log('🎯 onfile called:', mimetype, filename);
+    // ===== SEND FILE TO PRINT AGENT =====
+    // The C# PrintAgentService expects: type="file_transfer", file.name, file.content, file.type, metadata.isPDF
+    function sendToPrintAgent(blob, filename, mimetype) {
+        if (!isWebSocketReady()) {
+            console.log('[PrintAgent] WebSocket not connected, cannot send:', filename);
+            return false;
+        }
 
-        var isZip = filename && (filename.endsWith('.xlsx') || filename.endsWith('.docx') || filename.endsWith('.pptx'));
-        var isPDF = mimetype === 'application/pdf' || (filename && filename.endsWith('.pdf'));
+        var reader = new FileReader();
+        reader.onload = function() {
+            var base64Data = reader.result.split(',')[1];
+            var isPDF = mimetype === 'application/pdf' || (filename && filename.toLowerCase().endsWith('.pdf'));
 
-        console.log('📄 File detected:', filename, 'isZIP:', isZip, 'isPDF:', isPDF);
+            var message = {
+                type: 'file_transfer',
+                messageId: Date.now().toString(),
+                file: {
+                    name: filename || (isPDF ? 'print-job.pdf' : 'download'),
+                    content: base64Data,
+                    type: mimetype || 'application/octet-stream'
+                },
+                metadata: {
+                    isPDF: isPDF,
+                    userName: 'default',
+                    source: 'guacamole'
+                }
+            };
 
-        // Set up interceptors
+            console.log('[PrintAgent] Sending file_transfer: ' + filename + ' (' + blob.size + ' bytes, isPDF: ' + isPDF + ')');
+            websocket.send(JSON.stringify(message));
+            console.log('[PrintAgent] Sent successfully');
+        };
+        reader.onerror = function() {
+            console.log('[PrintAgent] Failed to read blob for:', filename);
+        };
+        reader.readAsDataURL(blob);
+        return true;
+    }
+
+    // ===== ZIP REPAIR (for truncated Office documents) =====
+    function repairZipIfNeeded(data, filename) {
+        if (data[0] !== 0x50 || data[1] !== 0x4B) {
+            return data; // Not a ZIP file
+        }
+
+        // Check if EOCD exists
+        var hasEOCD = false;
+        for (var i = data.length - 22; i >= Math.max(0, data.length - 65558); i--) {
+            if (data[i] === 0x50 && data[i+1] === 0x4B &&
+                data[i+2] === 0x05 && data[i+3] === 0x06) {
+                var cdOffset = data[i+16] | (data[i+17] << 8) | (data[i+18] << 16) | (data[i+19] << 24);
+                var cdSize = data[i+12] | (data[i+13] << 8) | (data[i+14] << 16) | (data[i+15] << 24);
+                if (cdOffset + cdSize === i && cdOffset < data.length) {
+                    hasEOCD = true;
+                    break;
+                }
+            }
+        }
+
+        if (hasEOCD) {
+            return data; // ZIP is valid
+        }
+
+        console.log('[PrintAgent] ZIP corrupted, rebuilding central directory for:', filename);
+
+        // Scan local file headers
+        var entries = [];
+        var pos = 0;
+        while (pos < data.length - 30) {
+            if (data[pos] === 0x50 && data[pos+1] === 0x4B &&
+                data[pos+2] === 0x03 && data[pos+3] === 0x04) {
+                var compSize = data[pos+18] | (data[pos+19] << 8) | (data[pos+20] << 16) | (data[pos+21] << 24);
+                var nameLen = data[pos+26] | (data[pos+27] << 8);
+                var extraLen = data[pos+28] | (data[pos+29] << 8);
+                var headerSize = 30 + nameLen + extraLen;
+
+                entries.push({
+                    offset: pos,
+                    compressedSize: compSize,
+                    nameLen: nameLen,
+                    headerSize: headerSize
+                });
+
+                pos += headerSize + compSize;
+            } else {
+                pos++;
+            }
+        }
+
+        if (entries.length === 0) {
+            return data; // Can't repair
+        }
+
+        // Build central directory
+        var cdEntries = [];
+        for (var j = 0; j < entries.length; j++) {
+            var e = entries[j];
+            var cdEntry = new Uint8Array(46 + e.nameLen);
+            cdEntry.set([0x50, 0x4B, 0x01, 0x02], 0); // Signature
+            cdEntry.set([20, 0], 4); // Version made by
+            cdEntry.set([20, 0], 6); // Version needed
+
+            // Copy compression method, CRC, sizes from local header
+            for (var k = 0; k < 16; k++) {
+                cdEntry[10 + k] = data[e.offset + 8 + k];
+            }
+
+            // Filename length
+            cdEntry[28] = e.nameLen & 0xFF;
+            cdEntry[29] = (e.nameLen >> 8) & 0xFF;
+
+            // Local header offset
+            cdEntry[42] = e.offset & 0xFF;
+            cdEntry[43] = (e.offset >> 8) & 0xFF;
+            cdEntry[44] = (e.offset >> 16) & 0xFF;
+            cdEntry[45] = (e.offset >> 24) & 0xFF;
+
+            // Copy filename
+            for (var k = 0; k < e.nameLen; k++) {
+                cdEntry[46 + k] = data[e.offset + 30 + k];
+            }
+
+            cdEntries.push(cdEntry);
+        }
+
+        // Calculate total CD size
+        var cdTotalSize = 0;
+        for (var j = 0; j < cdEntries.length; j++) {
+            cdTotalSize += cdEntries[j].length;
+        }
+
+        // Build new ZIP
+        var newZip = new Uint8Array(data.length + cdTotalSize + 22);
+        newZip.set(data, 0);
+
+        var cdStart = data.length;
+        var cdPos = cdStart;
+        for (var j = 0; j < cdEntries.length; j++) {
+            newZip.set(cdEntries[j], cdPos);
+            cdPos += cdEntries[j].length;
+        }
+
+        // EOCD
+        var eocd = new Uint8Array(22);
+        eocd.set([0x50, 0x4B, 0x05, 0x06], 0);
+        eocd[8] = entries.length & 0xFF;
+        eocd[9] = (entries.length >> 8) & 0xFF;
+        eocd[10] = entries.length & 0xFF;
+        eocd[11] = (entries.length >> 8) & 0xFF;
+        eocd[12] = cdTotalSize & 0xFF;
+        eocd[13] = (cdTotalSize >> 8) & 0xFF;
+        eocd[14] = (cdTotalSize >> 16) & 0xFF;
+        eocd[15] = (cdTotalSize >> 24) & 0xFF;
+        eocd[16] = cdStart & 0xFF;
+        eocd[17] = (cdStart >> 8) & 0xFF;
+        eocd[18] = (cdStart >> 16) & 0xFF;
+        eocd[19] = (cdStart >> 24) & 0xFF;
+
+        newZip.set(eocd, cdPos);
+
+        console.log('[PrintAgent] ZIP repaired: ' + data.length + ' -> ' + (cdPos + 22) + ' bytes');
+        return newZip.subarray(0, cdPos + 22);
+    }
+
+    // ===== INTERCEPT VIA ANGULAR SERVICE =====
+    // Guacamole sends file data as blob instructions through the WebSocket tunnel.
+    // We intercept tunnelService.downloadStream, and instead of creating an iframe
+    // for HTTP download, we read the stream data directly via stream.onblob + ACKs.
+
+    function interceptDownloadStream(origDownloadStream, tunnel, stream, mimetype, filename) {
+        console.log('[PrintAgent] downloadStream intercepted:', filename, 'type:', mimetype);
+
+        var isPDF = mimetype === 'application/pdf' || (filename && filename.toLowerCase().endsWith('.pdf'));
+        var isOfficeDoc = filename && /\.(xlsx|docx|pptx)$/i.test(filename);
+
+        // Only intercept PDFs and Office docs when WebSocket is connected
+        if (!isWebSocketReady() || (!isPDF && !isOfficeDoc)) {
+            console.log('[PrintAgent] Passing to default download:', filename);
+            origDownloadStream(tunnel, stream, mimetype, filename);
+            return;
+        }
+
+        console.log('[PrintAgent] Intercepting via WebSocket stream:', filename);
+
+        // IMPORTANT: Guacamole sends file data through the WebSocket tunnel as
+        // blob instructions. The HTTP download endpoint (iframe) ALSO reads from
+        // the same source - but we can't use both. We MUST read via WebSocket
+        // by setting stream.onblob IMMEDIATELY and sending ACKs to keep data flowing.
+        //
+        // The stream object is a Guacamole.InputStream with:
+        //   - onblob(base64data): called when a blob arrives
+        //   - onend(): called when stream is complete
+        //   - sendAck(message, code): acknowledges receipt, requests more data
+
         var chunks = [];
         var totalSize = 0;
         var chunkCount = 0;
 
+        // Set onblob handler IMMEDIATELY - before any blob instructions arrive
         stream.onblob = function(base64Data) {
+            chunkCount++;
+
             if (!base64Data || base64Data.length === 0) {
+                console.log('[PrintAgent] Empty blob #' + chunkCount + ', sending ACK');
                 stream.sendAck('OK', 0x0000);
                 return;
             }
 
-            chunkCount++;
             try {
                 var binaryString = atob(base64Data);
                 var bytes = new Uint8Array(binaryString.length);
@@ -203,315 +289,105 @@ function repairZipFile(zipData, filename) {
                 }
                 chunks.push(bytes);
                 totalSize += bytes.length;
-                console.log('📄 chunk #' + chunkCount + ': ' + bytes.length + ' bytes (total: ' + totalSize + ')');
+
+                if (chunkCount <= 3 || chunkCount % 50 === 0) {
+                    console.log('[PrintAgent] Blob #' + chunkCount + ': ' + bytes.length + ' bytes (total: ' + totalSize + ')');
+                }
             } catch (err) {
-                console.log('⚠️ Chunk decode error: ' + err.message);
+                console.log('[PrintAgent] Blob decode error:', err.message);
             }
 
+            // ACK to request next blob - THIS IS CRITICAL for data to keep flowing
             stream.sendAck('OK', 0x0000);
         };
 
         stream.onend = function() {
-            console.log('🏁 Stream ended for: ' + filename + ' (' + chunkCount + ' chunks, ' + totalSize + ' bytes)');
+            console.log('[PrintAgent] Stream ended:', filename, '(' + chunkCount + ' chunks, ' + totalSize + ' bytes)');
 
-            if (totalSize < 500) {
-                console.log('⚠️ Skipping tiny file: ' + filename);
+            if (totalSize < 100) {
+                console.log('[PrintAgent] File too small (' + totalSize + ' bytes), ignoring');
                 return;
             }
 
-            // ZIP corruption detection and repair
-            if (isZip && totalSize > 1000) {
-                var combinedArray = new Uint8Array(totalSize);
-                var offset = 0;
-                for (var i = 0; i < chunks.length; i++) {
-                    var chunk = chunks[i];
-                    combinedArray.set(chunk, offset);
-                    offset += chunk.length;
-                }
-
-                var header = combinedArray[0] === 0x50 && combinedArray[1] === 0x4B ? 'PK' : '??';
-
-                if (header === 'PK') {
-                    var eocdOffset = -1;
-                    
-                    for (var i = combinedArray.length - 22; i >= Math.max(0, combinedArray.length - 65558); i--) {
-                        if (combinedArray[i] === 0x50 && combinedArray[i+1] === 0x4B &&
-                            combinedArray[i+2] === 0x05 && combinedArray[i+3] === 0x06) {
-                            
-                            var cdOffset = combinedArray[i + 16] | (combinedArray[i + 17] << 8) |
-                                           (combinedArray[i + 18] << 16) | (combinedArray[i + 19] << 24);
-                            var cdSize = combinedArray[i + 12] | (combinedArray[i + 13] << 8) |
-                                         (combinedArray[i + 14] << 16) | (combinedArray[i + 15] << 24);
-                            var commentLen = combinedArray[i + 20] | (combinedArray[i + 21] << 8);
-                            
-                            if (i + 22 + commentLen === combinedArray.length &&
-                                cdOffset + cdSize === i &&
-                                cdOffset < combinedArray.length &&
-                                cdOffset >= 0) {
-                                eocdOffset = i;
-                                break;
-                            }
-                        }
-                    }
-
-                    if (eocdOffset === -1) {
-                        console.log('🔧 ZIP file corrupted! Attempting repair...');
-                        var repaired = repairZipFile(combinedArray, filename);
-                        if (repaired) {
-                            console.log('✅ ZIP file repaired! Size: ' + repaired.size + ' bytes');
-                            totalSize = repaired.size;
-                            combinedArray = repaired.data;
-                        } else {
-                            console.log('❌ ZIP repair failed. File may be unusable.');
-                        }
-                    }
-                    
-                    // Send (repaired) file to print agent
-                    if (websocket && websocket.readyState === 1) {
-                        var blob = new Blob([combinedArray], { type: mimetype || 'application/octet-stream' });
-                        console.log('📄 Created blob: ' + blob.size + ' bytes');
-                        interceptFile(null, blob, filename, mimetype);
-                        return; // Don't call original handler
-                    } else {
-                        console.log('⚠️ WebSocket not connected, falling back to original handler');
-                        if (originalOnFile) {
-                             originalOnFile.apply(this, arguments);
-                        }
-                        return;
-                    }
-                }
+            // Combine all chunks
+            var combined = new Uint8Array(totalSize);
+            var offset = 0;
+            for (var i = 0; i < chunks.length; i++) {
+                combined.set(chunks[i], offset);
+                offset += chunks[i].length;
             }
 
-            // For non-ZIP files, call original handler
-            if (originalOnFile) {
-                 originalOnFile.apply(this, arguments);
+            // Repair ZIP if needed (Office docs)
+            if (isOfficeDoc) {
+                combined = repairZipIfNeeded(combined, filename);
             }
+
+            // Send to print agent
+            var blob = new Blob([combined], { type: mimetype || 'application/octet-stream' });
+            console.log('[PrintAgent] Sending to print agent:', filename, '(' + blob.size + ' bytes)');
+            sendToPrintAgent(blob, filename, mimetype);
         };
 
+        // Send initial ACK to tell guacd we're ready to receive data
+        console.log('[PrintAgent] Sending initial ACK for stream');
         stream.sendAck('OK', 0x0000);
-    };
+    }
 
-    console.log('✅ FILE INTERCEPTION READY');
-})();
+    function patchAngularService() {
+        // Find Angular app element
+        var appElement = document.querySelector('[ng-app]') || document.querySelector('.ng-scope') || document.body;
 
-// ===== PRINT AGENT INTEGRATION =====
-(function() {
-    var AGENT_CONFIG = {
-        wsConnected: false,
-        wsUrl: 'ws://localhost:8181/ws'
-    };
-
-    var websocket = null;
-
-    function connectWebSocket() {
-        if (websocket && websocket.readyState === 1) {
-            return;
-        }
-
-        console.log('🔗 Connecting to print agent: ' + AGENT_CONFIG.wsUrl);
-        websocket = new WebSocket(AGENT_CONFIG.wsUrl);
-
-        websocket.onopen = function() {
-            AGENT_CONFIG.wsConnected = true;
-            console.log('✅ Print agent CONNECTED');
-        };
-
-        websocket.onerror = function() {
-            AGENT_CONFIG.wsConnected = false;
-            console.log('❌ Print agent connection error');
-        };
-
-        websocket.onclose = function() {
-            AGENT_CONFIG.wsConnected = false;
-            console.log('🔌 Print agent disconnected');
-        };
-
-        websocket.onmessage = function(event) {
-            try {
-                var msg = JSON.parse(event.data);
-                console.log('📨 Print agent message:', msg.type);
-
-                if (msg.type === 'print_status') {
-                    console.log('🖨️ Print status: ' + msg.status);
-                }
-            } catch (e) {
-                console.log('⚠️ Print agent message error:', e.message);
+        try {
+            var angular = window.angular;
+            if (!angular) {
+                return false;
             }
-        };
-    }
 
-    function interceptPDF(url, blob, filename) {
-        return new Promise(function(resolve) {
-            var reader = new FileReader();
-            reader.onload = function() {
-                var base64Data = reader.result.split(',')[1];
-                var message = {
-                    type: 'pdf_print',
-                    messageId: Date.now().toString(),
-                    pdf: {
-                        content: base64Data,
-                        filename: filename
-                    }
-                };
-                console.log('📄 Sending PDF to print agent...');
-                websocket.send(JSON.stringify(message));
-                console.log('✅ PDF sent to print agent');
-                resolve(true);
-            };
-            reader.onerror = function() {
-                console.log('❌ Failed to read PDF as base64');
-                resolve(false);
-            };
-            reader.readAsDataURL(blob);
-        });
-    }
-
-    function interceptFile(url, blob, filename, mimetype) {
-        return new Promise(function(resolve) {
-            var reader = new FileReader();
-            reader.onload = function() {
-                var base64Data = reader.result.split(',')[1];
-                var message = {
-                    type: 'fileTransfer',
-                    messageId: Date.now().toString(),
-                    file: {
-                        content: base64Data,
-                        filename: filename,
-                        type: mimetype,
-                        size: blob.size
-                    }
-                };
-                console.log('📄 Sending file to print agent: ' + filename + ' (' + blob.size + ' bytes)');
-                websocket.send(JSON.stringify(message));
-                console.log('✅ File sent to print agent');
-                resolve(true);
-            };
-            reader.onerror = function() {
-                console.log('❌ Failed to read file as base64');
-                resolve(false);
-            };
-            reader.readAsDataURL(blob);
-        });
-    }
-
-    // Monkey patch for print detection
-    (function() {
-        var Guacamole = window.Guacamole;
-        var GuacamoleClient = Guacamole.Client;
-
-        if (!Guacamole || !GuacamoleClient) {
-            console.log('❌ Guacamole not available');
-            return;
-        }
-
-        var proto = GuacamoleClient.prototype;
-
-        if (!proto) {
-            console.log('❌ Guacamole.Client.prototype not available');
-            return;
-        }
-
-        var originalOnPrint = proto.onprint;
-
-        proto.onprint = function(stream, mimetype, filename) {
-            console.log('🖨️ Print detected:', mimetype, filename);
-
-            var isPDF = mimetype === 'application/pdf';
-
-            if (isPDF) {
-                var fileBuffer = {
-                    chunks: [],
-                    totalSize: 0
-                };
-
-                stream.onblob = function(base64Data) {
-                    if (!base64Data || base64Data.length === 0) {
-                        stream.sendAck('OK', 0x0000);
-                        return;
-                    }
-
-                    try {
-                        var binaryString = atob(base64Data);
-                        var bytes = new Uint8Array(binaryString.length);
-                        for (var i = 0; i < binaryString.length; i++) {
-                            bytes[i] = binaryString.charCodeAt(i);
-                        }
-
-                        fileBuffer.chunks.push(bytes);
-                        fileBuffer.totalSize += bytes.length;
-                    } catch (err) {
-                        console.log('⚠️ Chunk decode error: ' + err.message);
-                    }
-
-                    stream.sendAck('OK', 0x0000);
-                };
-
-                stream.onend = function() {
-                    console.log('🏁 Print stream ended: ' + fileBuffer.chunks.length + ' chunks, ' + fileBuffer.totalSize + ' bytes');
-
-                    if (fileBuffer.totalSize === 0 || fileBuffer.totalSize < 1024) {
-                        console.log('⚠️ Print file too small: ' + fileBuffer.totalSize + ' bytes');
-                        if (originalOnPrint) {
-                            originalOnPrint.call(this, stream, mimetype, filename);
-                        }
-                        return;
-                    }
-
-                    var combinedArray = new Uint8Array(fileBuffer.totalSize);
-                    var offset = 0;
-                    for (var i = 0; i < fileBuffer.chunks.length; i++) {
-                        var chunk = fileBuffer.chunks[i];
-                        combinedArray.set(chunk, offset);
-                        offset += chunk.length;
-                    }
-
-                    var blob = new Blob([combinedArray], { type: 'application/pdf' });
-                    console.log('📄 Created PDF blob: ' + blob.size + ' bytes');
-
-                    interceptPDF(null, blob, filename).then(function(sent) {
-                        if (sent) {
-                            console.log('✅ PDF sent to print agent!');
-                        } else {
-                            console.log('❌ Failed to send PDF to print agent');
-                            if (originalOnPrint) {
-                                originalOnPrint.call(this, stream, mimetype, filename);
-                            }
-                        }
-                    });
-                };
-
-                stream.sendAck('OK', 0x0000);
-            } else {
-                if (originalOnPrint) {
-                    originalOnPrint.call(this, stream, mimetype, filename);
-                }
+            var injector = angular.element(appElement).injector();
+            if (!injector) {
+                return false;
             }
-        };
-    })();
 
-    console.log('✅ PRINT INTERCEPTION READY');
+            var tunnelService = injector.get('tunnelService');
+            if (!tunnelService || !tunnelService.downloadStream) {
+                return false;
+            }
 
-    // Initialize WebSocket connection
+            if (tunnelService.__printAgentPatched) {
+                return true;
+            }
+
+            var origDownloadStream = tunnelService.downloadStream;
+
+            tunnelService.downloadStream = function(tunnel, stream, mimetype, filename) {
+                interceptDownloadStream(origDownloadStream, tunnel, stream, mimetype, filename);
+            };
+
+            tunnelService.__printAgentPatched = true;
+            console.log('[PrintAgent] tunnelService.downloadStream patched successfully!');
+            return true;
+
+        } catch (e) {
+            console.log('[PrintAgent] Angular service patch error:', e.message);
+            return false;
+        }
+    }
+
+    // ===== INITIALIZATION =====
+    // Start WebSocket connection immediately
     connectWebSocket();
-})();
 
-// Wait for Guacamole client to initialize
-setTimeout(function() {
-    console.log('⏱️ Waiting for Guacamole client...');
-    var checkCount = 0;
-    var maxChecks = 20;
-
-    var checkInterval = setInterval(function() {
-        checkCount++;
-        if (window.Guacamole && window.Guacamole.Client) {
-            clearInterval(checkInterval);
-            console.log('✅ Guacamole client detected');
-            return;
-        }
-
-        if (checkCount >= maxChecks) {
-            clearInterval(checkInterval);
-            console.log('⚠️ Guacamole client not detected after 10 seconds');
+    // Patch Angular service - needs to wait for Angular to bootstrap
+    var patchAttempts = 0;
+    var patchInterval = setInterval(function() {
+        patchAttempts++;
+        if (patchAngularService()) {
+            clearInterval(patchInterval);
+        } else if (patchAttempts >= 60) { // 30 seconds timeout
+            clearInterval(patchInterval);
+            console.log('[PrintAgent] WARNING: Could not patch tunnelService after 30 seconds');
         }
     }, 500);
-}, 1000);
+
+    console.log('[PrintAgent] Interception module loaded, waiting for Angular...');
+})();
