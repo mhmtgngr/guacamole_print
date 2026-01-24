@@ -1,0 +1,30 @@
+# Build outputs
+*.exe
+*.dll
+*.pdb
+*.obj/
+*.bin/
+Debug/
+Release/
+
+# Node modules
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE files
+.vs/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+nul
