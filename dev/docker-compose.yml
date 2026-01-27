@@ -1,11 +1,11 @@
-# ==================== DOCKER COMPOSE FOR GUACAMOLE WITH PRINT AGENT ====================
-# Production-ready Docker Compose setup with file transfer and print interception
+# Docker Compose for Guacamole with Print Agent v4.0
+# Run: docker-compose up -d --build
 
 services:
   # PostgreSQL database
   postgres:
     image: postgres:15-alpine
-    container_name: guacamole-db-print
+    container_name: guac-print-db
     environment:
       POSTGRES_DB: guacamole_db
       POSTGRES_USER: guacamole_user
@@ -14,30 +14,37 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./initdb:/docker-entrypoint-initdb.d
     networks:
-      - guacamole-network
+      - guac-network
     restart: unless-stopped
 
-  # Guacamole daemon (guacd) - handles RDP/VNC connections
-  guacd:
-    build:
-      context: .
-      dockerfile: Dockerfile.guacd-patched
-    image: guacd-patched-simple:1.0.0
-    container_name: guacamole-daemon-print
-    environment:
-      GUACD_LOG_LEVEL: debug
+  # Init container to fix drive permissions (guacd runs as UID 1000)
+  guacd-init:
+    image: guacamole/guacd:latest
+    container_name: guac-drive-init
+    user: root
+    entrypoint: sh -c "chown -R 1000:1000 /drive && chmod -R 777 /drive"
     volumes:
-      - guacd-drive:/tmp/guac-drive
+      - ./drive:/drive
+
+  # Guacamole daemon (guacd)
+  guacd:
+    image: guacamole/guacd:latest
+    container_name: guac-print-daemon
+    volumes:
+      - ./drive:/drive
+    depends_on:
+      guacd-init:
+        condition: service_completed_successfully
     networks:
-      - guacamole-network
+      - guac-network
     restart: unless-stopped
 
-  # Guacamole web application
+  # Guacamole web application with print interception
   guacamole:
     build:
       context: .
-      dockerfile: Dockerfile.aggressive-print
-    container_name: guacamole-web-print
+      dockerfile: Dockerfile
+    container_name: guac-print-web
     environment:
       POSTGRESQL_HOSTNAME: postgres
       POSTGRESQL_DATABASE: guacamole_db
@@ -51,13 +58,12 @@ services:
       - postgres
       - guacd
     networks:
-      - guacamole-network
+      - guac-network
     restart: unless-stopped
 
 volumes:
   postgres_data:
-  guacd-drive:
 
 networks:
-  guacamole-network:
+  guac-network:
     driver: bridge

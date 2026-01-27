@@ -1,12 +1,16 @@
 using System;
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Imaging;
 using System.Drawing.Printing;
 using System.IO;
 using System.Net.WebSockets;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using PDFtoImage;
+using SkiaSharp;
 using System.Windows.Forms;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -19,6 +23,74 @@ namespace SimplePrintAgent;
 
 public class SimplePrintAgent
 {
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool AllowSetForegroundWindow(int dwProcessId);
+
+    [DllImport("user32.dll")]
+    private static extern bool BringWindowToTop(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    [DllImport("user32.dll")]
+    private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+    [DllImport("user32.dll")]
+    private static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+
+    [DllImport("kernel32.dll")]
+    private static extern uint GetCurrentThreadId();
+
+    [DllImport("kernel32.dll")]
+    private static extern int GetCurrentProcessId();
+
+    private const int SW_SHOW = 5;
+    private const int SW_RESTORE = 9;
+    private const byte VK_MENU = 0x12; // Alt key
+    private const uint KEYEVENTF_EXTENDEDKEY = 0x0001;
+    private const uint KEYEVENTF_KEYUP = 0x0002;
+
+    /// <summary>
+    /// Force a window to the foreground even from a background process.
+    /// </summary>
+    private static void ForceForeground(IntPtr hWnd)
+    {
+        // Get the foreground window's thread
+        IntPtr foreWnd = GetForegroundWindow();
+        GetWindowThreadProcessId(foreWnd, out _);
+        uint foreThread = GetWindowThreadProcessId(foreWnd, out _);
+        uint appThread = GetCurrentThreadId();
+
+        // Attach to the foreground thread
+        if (foreThread != appThread)
+        {
+            AttachThreadInput(foreThread, appThread, true);
+        }
+
+        // Simulate Alt key press - this unlocks SetForegroundWindow
+        keybd_event(VK_MENU, 0, KEYEVENTF_EXTENDEDKEY, UIntPtr.Zero);
+        keybd_event(VK_MENU, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, UIntPtr.Zero);
+
+        ShowWindow(hWnd, SW_RESTORE);
+        BringWindowToTop(hWnd);
+        SetForegroundWindow(hWnd);
+
+        // Detach
+        if (foreThread != appThread)
+        {
+            AttachThreadInput(foreThread, appThread, false);
+        }
+    }
+
     private static readonly string BaseFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "GuacamoleFiles");
     private static readonly string TempFolder = Path.Combine(Path.GetTempPath(), "GuacamolePrint");
     private static readonly string LogFile = Path.Combine(TempFolder, "error.log");
@@ -38,6 +110,9 @@ public class SimplePrintAgent
     public static async Task Main(string[] args)
     {
         Console.WriteLine("🚀 Starting Simple Guacamole Print Agent...");
+
+        // Allow this process to set foreground windows
+        AllowSetForegroundWindow(GetCurrentProcessId());
 
         // Ensure temp folder exists
         Directory.CreateDirectory(TempFolder);
@@ -133,6 +208,11 @@ public class SimplePrintAgent
                             Console.WriteLine("📄 Processing file_transfer...");
                             await HandleFileTransfer(webSocket, msg);
                         }
+                        else if (msgType == "ping")
+                        {
+                            // Heartbeat - respond silently
+                            await SendMessage(webSocket, new { type = "pong" });
+                        }
                         else if (msgType == "status_query" && msg != null)
                         {
                             await HandleStatusQuery(webSocket, msg);
@@ -191,131 +271,116 @@ public class SimplePrintAgent
             // Default save path in user folder
             string defaultSavePath = Path.Combine(userFolder, fileName);
 
-            // Show dialog on UI thread
-            string? selectedAction = null;
-            string? savedPath = null;
-
-            var dialogThread = new Thread(() =>
-            {
-                var result = ShowFileDialog(fileName, tempFilePath, fileBytes.Length, isPDF, defaultSavePath);
-                selectedAction = result.action;
-                savedPath = result.path;
-            });
-            dialogThread.SetApartmentState(ApartmentState.STA);
-            dialogThread.Start();
-            dialogThread.Join();
-
-            // Execute action based on dialog result
+            // Execute action based on file type
             string actionResult = "cancelled";
             string resultPath = tempFilePath;
 
-            switch (selectedAction)
+            // For PDF files: render and show Windows print dialog
+            if (isPDF)
             {
-                case "print":
-                    Console.WriteLine("🖨️ Opening print dialog...");
-                    string? selectedPrinter = null;
+                Console.WriteLine("🖨️ PDF detected - showing print dialog...");
 
-                    // Show native Windows print dialog on STA thread
-                    var printDialogThread = new Thread(() =>
+                var dialogThread = new Thread(() =>
+                {
+                  try
+                  {
+                    // Get page count (fast, no rendering)
+                    int pageCount = Conversion.GetPageCount(fileBytes);
+                    Console.WriteLine($"📄 PDF has {pageCount} page(s)");
+
+                    // Set up PrintDocument - render pages on demand during printing
+                    int currentPage = 0;
+                    var printDoc = new PrintDocument();
+                    printDoc.DocumentName = fileName;
+
+                    printDoc.PrintPage += (sender, e) =>
                     {
-                        using var printDialog = new PrintDialog();
-                        printDialog.AllowSomePages = false;
-                        printDialog.AllowCurrentPage = false;
-                        printDialog.AllowSelection = false;
-                        printDialog.UseEXDialog = true;
+                        // Render at print time with high DPI
+                        var opts = new RenderOptions(Dpi: 300);
+                        using var skBitmap = Conversion.ToImage(fileBytes, currentPage, null, opts);
+                        using var skData = skBitmap.Encode(SKEncodedImageFormat.Png, 100);
+                        using var ms = new MemoryStream(skData.ToArray());
+                        using var img = Image.FromStream(ms);
 
-                        if (printDialog.ShowDialog() == DialogResult.OK)
-                        {
-                            selectedPrinter = printDialog.PrinterSettings.PrinterName;
-                        }
-                    });
-                    printDialogThread.SetApartmentState(ApartmentState.STA);
-                    printDialogThread.Start();
-                    printDialogThread.Join();
+                        // Scale image to fit page margins
+                        var bounds = e.MarginBounds;
+                        float scale = Math.Min(
+                            (float)bounds.Width / img.Width,
+                            (float)bounds.Height / img.Height);
+                        int w = (int)(img.Width * scale);
+                        int h = (int)(img.Height * scale);
+                        int x = bounds.X + (bounds.Width - w) / 2;
+                        int y = bounds.Y + (bounds.Height - h) / 2;
+                        e.Graphics!.DrawImage(img, x, y, w, h);
+                        currentPage++;
+                        e.HasMorePages = currentPage < pageCount;
+                    };
 
-                    if (!string.IsNullOrEmpty(selectedPrinter))
+                    // Show Windows print dialog using a TopMost owner form
+                    using var ownerForm = new Form
                     {
-                        Console.WriteLine($"🖨️ Printing to: {selectedPrinter}");
-                        try
-                        {
-                            // Use PowerShell to print PDF to selected printer
-                            var psi = new ProcessStartInfo
-                            {
-                                FileName = "powershell.exe",
-                                Arguments = $"-Command \"Start-Process -FilePath '{tempFilePath}' -Verb Print -PassThru | ForEach-Object {{ Start-Sleep -Seconds 3; $_ | Stop-Process -Force }}\"",
-                                UseShellExecute = false,
-                                CreateNoWindow = true
-                            };
-                            Process.Start(psi);
-                            actionResult = "printed";
-                            Console.WriteLine("✅ Print job sent");
-                        }
-                        catch (Exception printEx)
-                        {
-                            Console.WriteLine($"⚠️ Print error: {printEx.Message}");
-                            // Fallback: copy to printer spool
-                            try
-                            {
-                                var copyPsi = new ProcessStartInfo
-                                {
-                                    FileName = "cmd.exe",
-                                    Arguments = $"/c copy /b \"{tempFilePath}\" \"\\\\localhost\\{selectedPrinter}\"",
-                                    UseShellExecute = false,
-                                    CreateNoWindow = true
-                                };
-                                Process.Start(copyPsi);
-                                actionResult = "printed";
-                            }
-                            catch
-                            {
-                                Process.Start("explorer.exe", $"/select,\"{tempFilePath}\"");
-                                actionResult = "opened_folder";
-                            }
-                        }
+                        Width = 1,
+                        Height = 1,
+                        StartPosition = FormStartPosition.CenterScreen,
+                        ShowInTaskbar = false,
+                        FormBorderStyle = FormBorderStyle.None,
+                        Opacity = 0,
+                        TopMost = true
+                    };
+                    ownerForm.Show();
+                    ForceForeground(ownerForm.Handle);
+
+                    using var printDialog = new PrintDialog();
+                    printDialog.Document = printDoc;
+                    printDialog.AllowSomePages = true;
+                    printDialog.UseEXDialog = true;
+
+                    if (printDialog.ShowDialog(ownerForm) == DialogResult.OK)
+                    {
+                        printDoc.Print();
+                        actionResult = "printing";
+                        Console.WriteLine("✅ PDF sent to printer");
                     }
                     else
                     {
-                        Console.WriteLine("❌ Print cancelled by user");
                         actionResult = "cancelled";
+                        Console.WriteLine("❌ Print cancelled by user");
                     }
-                    break;
+                    ownerForm.Close();
+                  }
+                  catch (Exception dialogEx)
+                  {
+                    Console.WriteLine($"❌ Print error: {dialogEx.Message}");
+                    LogError("PDF print error", dialogEx);
+                    actionResult = "error";
+                  }
+                });
 
-                case "save":
-                    if (!string.IsNullOrEmpty(savedPath))
+                dialogThread.SetApartmentState(ApartmentState.STA);
+                dialogThread.Start();
+                dialogThread.Join();
+            }
+            else
+            {
+                // For non-PDF files: open directly with default application
+                Console.WriteLine($"📂 Opening {fileName} with default application...");
+                try
+                {
+                    ProcessStartInfo openInfo = new()
                     {
-                        File.Copy(tempFilePath, savedPath, true);
-                        resultPath = savedPath;
-                        Console.WriteLine($"💾 Saved to: {savedPath}");
-                        actionResult = "saved";
-                    }
-                    break;
-
-                case "open":
-                    Console.WriteLine("📂 Opening file...");
-                    try
-                    {
-                        // Try to open with default app
-                        ProcessStartInfo openInfo = new()
-                        {
-                            FileName = tempFilePath,
-                            UseShellExecute = true
-                        };
-                        Process.Start(openInfo);
-                        actionResult = "opened";
-                    }
-                    catch
-                    {
-                        // Fallback: open file location in explorer
-                        Process.Start("explorer.exe", $"/select,\"{tempFilePath}\"");
-                        actionResult = "opened_folder";
-                        Console.WriteLine("⚠️ Open failed, opened folder instead");
-                    }
-                    break;
-
-                default:
-                    Console.WriteLine("❌ User cancelled");
-                    actionResult = "cancelled";
-                    break;
+                        FileName = tempFilePath,
+                        UseShellExecute = true
+                    };
+                    Process.Start(openInfo);
+                    actionResult = "opened";
+                    Console.WriteLine($"✅ Opened {fileName} with default application");
+                }
+                catch (Exception openEx)
+                {
+                    Console.WriteLine($"⚠️ Default app open failed: {openEx.Message}, opening folder...");
+                    Process.Start("explorer.exe", $"/select,\"{tempFilePath}\"");
+                    actionResult = "opened_folder";
+                }
             }
 
             // Send response
@@ -353,10 +418,13 @@ public class SimplePrintAgent
 
     private static (string? action, string? path) ShowFileDialog(string fileName, string tempPath, int fileSize, bool isPDF, string defaultSavePath)
     {
+        // Note: This dialog is only shown for non-PDF files
+        // PDFs are printed directly without showing this dialog
+
         using var form = new Form
         {
-            Text = "Guacamole File Transfer",
-            Size = new Size(420, 200),
+            Text = "Dosya Aktarimi",
+            Size = new Size(350, 180),
             StartPosition = FormStartPosition.CenterScreen,
             FormBorderStyle = FormBorderStyle.FixedDialog,
             MaximizeBox = false,
@@ -364,53 +432,46 @@ public class SimplePrintAgent
             TopMost = true
         };
 
+        // Format file size in Turkish
+        string sizeText = fileSize < 1024 ? $"{fileSize} bayt" :
+                         fileSize < 1048576 ? $"{fileSize / 1024.0:N1} KB" :
+                         $"{fileSize / 1048576.0:N1} MB";
+
         var label = new Label
         {
-            Text = $"📁 Received: {fileName}\n📊 Size: {fileSize:N0} bytes\n\nWhat would you like to do?",
+            Text = $"Dosya: {fileName}\nBoyut: {sizeText}\n\nNe yapmak istiyorsunuz?",
             Location = new Point(20, 15),
-            Size = new Size(370, 55),
+            Size = new Size(300, 55),
             Font = new Font("Segoe UI", 10)
         };
 
-        int btnX = 20;
-        var btnPrint = new Button
-        {
-            Text = "🖨️ Print",
-            Location = new Point(btnX, 85),
-            Size = new Size(85, 35),
-            Font = new Font("Segoe UI", 9)
-        };
-
-        btnX = isPDF ? 115 : 20; // Shift buttons if no Print button
-
         var btnSave = new Button
         {
-            Text = "💾 Save",
-            Location = new Point(btnX, 85),
-            Size = new Size(85, 35),
+            Text = "Kaydet",
+            Location = new Point(20, 80),
+            Size = new Size(90, 35),
             Font = new Font("Segoe UI", 9)
         };
 
         var btnOpen = new Button
         {
-            Text = "📂 Open",
-            Location = new Point(btnX + 95, 85),
-            Size = new Size(85, 35),
+            Text = "Ac",
+            Location = new Point(120, 80),
+            Size = new Size(90, 35),
             Font = new Font("Segoe UI", 9)
         };
 
         var btnCancel = new Button
         {
-            Text = "❌ Cancel",
-            Location = new Point(btnX + 190, 85),
-            Size = new Size(85, 35),
+            Text = "Iptal",
+            Location = new Point(220, 80),
+            Size = new Size(90, 35),
             Font = new Font("Segoe UI", 9)
         };
 
         string? action = null;
         string? savedPath = defaultSavePath; // Default to user folder
 
-        btnPrint.Click += (s, e) => { action = "print"; form.Close(); };
         btnOpen.Click += (s, e) => { action = "open"; form.Close(); };
         btnCancel.Click += (s, e) => { action = "cancel"; form.Close(); };
 
@@ -433,7 +494,7 @@ public class SimplePrintAgent
                 FileName = fileName,
                 InitialDirectory = Path.GetDirectoryName(defaultSavePath),
                 Filter = filter,
-                Title = "Save File"
+                Title = "Dosya Kaydet"
             };
 
             if (saveDialog.ShowDialog() == DialogResult.OK)
@@ -444,24 +505,18 @@ public class SimplePrintAgent
             }
         };
 
-        // Add controls - Print button only for PDFs
-        if (isPDF)
-        {
-            form.Controls.AddRange(new Control[] { label, btnPrint, btnSave, btnOpen, btnCancel });
-            form.AcceptButton = btnPrint;
-        }
-        else
-        {
-            form.Controls.AddRange(new Control[] { label, btnSave, btnOpen, btnCancel });
-            form.AcceptButton = btnSave;
-        }
+        // Add controls (no Print button - PDFs print directly)
+        form.Controls.AddRange(new Control[] { label, btnSave, btnOpen, btnCancel });
+        form.AcceptButton = btnSave;
         form.CancelButton = btnCancel;
 
         // Bring to front
         form.Shown += (s, e) =>
         {
+            form.TopMost = true;
             form.BringToFront();
             form.Activate();
+            ForceForeground(form.Handle);
         };
 
         Application.Run(form);

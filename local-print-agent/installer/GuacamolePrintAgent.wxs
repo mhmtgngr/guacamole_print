@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:fw="http://wixtoolset.org/schemas/v4/wxs/firewall">
+
+  <Package Name="Guacamole Print Agent"
+           Manufacturer="Guacamole Print Solution"
+           Version="1.0.0.0"
+           UpgradeCode="B748B3C5-C676-4B01-83F6-6D8DEE89DFE4"
+           Scope="perMachine">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Guacamole Print Agent is already installed." />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <!-- Install directory -->
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="GuacamolePrintAgent">
+
+        <!-- Main executable -->
+        <Component Id="MainExecutable" Guid="ECC680FD-A314-4BE0-817B-F30181563D73">
+          <File Id="AgentExe" Source="GuacamolePrintAgent.exe" KeyPath="yes" />
+
+          <!-- Firewall rule for port 8181 -->
+          <fw:FirewallException Id="FwRule"
+                                Name="Guacamole Print Agent"
+                                Protocol="tcp"
+                                Port="8181"
+                                Scope="localSubnet"
+                                Profile="all" />
+        </Component>
+
+        <!-- Config file -->
+        <Component Id="ConfigFile" Guid="D299CF60-D633-41DC-9900-6908AB52454A">
+          <File Id="AppSettings" Source="appsettings.json" KeyPath="yes" />
+        </Component>
+
+        <!-- Hidden launcher VBS -->
+        <Component Id="HiddenLauncher" Guid="A1B2C3D4-E5F6-7890-ABCD-EF0123456789">
+          <File Id="StartHiddenVbs" Source="StartHidden.vbs" KeyPath="yes" />
+
+          <!-- Auto-start on login (current user registry) -->
+          <RegistryValue Root="HKCU"
+                         Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
+                         Name="GuacamolePrintAgent"
+                         Type="string"
+                         Value="wscript.exe &quot;[INSTALLFOLDER]StartHidden.vbs&quot;"
+                         KeyPath="no" />
+        </Component>
+
+        <!-- Uninstall batch -->
+        <Component Id="UninstallBat" Guid="F9E8D7C6-B5A4-3210-FEDC-BA9876543210">
+          <File Id="UninstallFile" Source="Uninstall.bat" KeyPath="yes" />
+        </Component>
+
+      </Directory>
+    </StandardDirectory>
+
+    <!-- Feature -->
+    <Feature Id="Complete" Title="Guacamole Print Agent" Level="1">
+      <ComponentRef Id="MainExecutable" />
+      <ComponentRef Id="ConfigFile" />
+      <ComponentRef Id="HiddenLauncher" />
+      <ComponentRef Id="UninstallBat" />
+    </Feature>
+
+    <!-- Launch agent after install using WiX v4 custom action -->
+    <CustomAction Id="LaunchAgent"
+                  Directory="INSTALLFOLDER"
+                  ExeCommand='wscript.exe "[INSTALLFOLDER]StartHidden.vbs"'
+                  Execute="deferred"
+                  Impersonate="yes"
+                  Return="asyncNoWait" />
+
+    <InstallExecuteSequence>
+      <Custom Action="LaunchAgent" After="InstallFinalize" Condition="NOT Installed OR REINSTALL" />
+    </InstallExecuteSequence>
+
+  </Package>
+</Wix>

@@ -3,8 +3,8 @@ FROM guacamole/guacamole:latest
 # Switch to root for modifications
 USER root
 
-# Copy aggressive print interception JavaScript
-COPY guacamole-extension-module/src/main/resources/js/aggressive-intercept.js /tmp/aggressive-intercept.js
+# Copy aggressive print interception JavaScript (v4.0 with Angular tunnelService patch)
+COPY aggressive-intercept.js /tmp/aggressive-intercept.js
 
 # Inject aggressive print interception script into WAR file
 RUN cd /tmp && \
@@ -12,11 +12,10 @@ RUN cd /tmp && \
     cd war-extract && \
     jar xf /opt/guacamole/webapp/guacamole.war index.html && \
     sed -i 's|</body>|<script src="aggressive-intercept.js"></script></body>|' index.html && \
-    jar uf /opt/guacamole/webapp/guacamole.war index.html && \
-    rm -f index.html && \
+    cp /tmp/aggressive-intercept.js . && \
+    jar uf /opt/guacamole/webapp/guacamole.war index.html aggressive-intercept.js && \
     cd .. && \
-    rm -rf war-extract && \
-    mv /tmp/aggressive-intercept.js /opt/guacamole/webapp/
+    rm -rf war-extract /tmp/aggressive-intercept.js
 
 # Copy startup script
 COPY start-aggressive-print.sh /opt/guacamole/start-aggressive-print.sh
