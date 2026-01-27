@@ -362,25 +362,71 @@ public class SimplePrintAgent
             }
             else
             {
-                // For non-PDF files: open directly with default application
-                Console.WriteLine($"📂 Opening {fileName} with default application...");
-                try
+                // For non-PDF files: show Windows Save As dialog
+                Console.WriteLine($"💾 Showing Save As dialog for {fileName}...");
+
+                var dialogThread = new Thread(() =>
                 {
-                    ProcessStartInfo openInfo = new()
+                    try
                     {
-                        FileName = tempFilePath,
-                        UseShellExecute = true
-                    };
-                    Process.Start(openInfo);
-                    actionResult = "opened";
-                    Console.WriteLine($"✅ Opened {fileName} with default application");
-                }
-                catch (Exception openEx)
-                {
-                    Console.WriteLine($"⚠️ Default app open failed: {openEx.Message}, opening folder...");
-                    Process.Start("explorer.exe", $"/select,\"{tempFilePath}\"");
-                    actionResult = "opened_folder";
-                }
+                        string ext = Path.GetExtension(fileName).ToLower();
+                        string filter = ext switch
+                        {
+                            ".xlsx" or ".xls" => "Excel Files (*.xlsx;*.xls)|*.xlsx;*.xls|All Files (*.*)|*.*",
+                            ".docx" or ".doc" => "Word Files (*.docx;*.doc)|*.docx;*.doc|All Files (*.*)|*.*",
+                            ".pptx" or ".ppt" => "PowerPoint Files (*.pptx;*.ppt)|*.pptx;*.ppt|All Files (*.*)|*.*",
+                            ".txt" => "Text Files (*.txt)|*.txt|All Files (*.*)|*.*",
+                            ".png" => "PNG Images (*.png)|*.png|All Files (*.*)|*.*",
+                            ".jpg" or ".jpeg" => "JPEG Images (*.jpg;*.jpeg)|*.jpg;*.jpeg|All Files (*.*)|*.*",
+                            ".zip" => "ZIP Archives (*.zip)|*.zip|All Files (*.*)|*.*",
+                            _ => "All Files (*.*)|*.*"
+                        };
+
+                        using var ownerForm = new Form
+                        {
+                            Width = 1, Height = 1,
+                            StartPosition = FormStartPosition.CenterScreen,
+                            ShowInTaskbar = false,
+                            FormBorderStyle = FormBorderStyle.None,
+                            Opacity = 0,
+                            TopMost = true
+                        };
+                        ownerForm.Show();
+                        ForceForeground(ownerForm.Handle);
+
+                        using var saveDialog = new SaveFileDialog
+                        {
+                            FileName = fileName,
+                            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
+                            Filter = filter,
+                            Title = "Dosya Kaydet"
+                        };
+
+                        if (saveDialog.ShowDialog(ownerForm) == DialogResult.OK)
+                        {
+                            File.Copy(tempFilePath, saveDialog.FileName, true);
+                            resultPath = saveDialog.FileName;
+                            actionResult = "saved";
+                            Console.WriteLine($"✅ File saved to: {saveDialog.FileName}");
+                        }
+                        else
+                        {
+                            actionResult = "cancelled";
+                            Console.WriteLine("❌ Save cancelled by user");
+                        }
+                        ownerForm.Close();
+                    }
+                    catch (Exception dialogEx)
+                    {
+                        Console.WriteLine($"❌ Save dialog error: {dialogEx.Message}");
+                        LogError("Save dialog error", dialogEx);
+                        actionResult = "error";
+                    }
+                });
+
+                dialogThread.SetApartmentState(ApartmentState.STA);
+                dialogThread.Start();
+                dialogThread.Join();
             }
 
             // Send response

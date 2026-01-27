@@ -45,10 +45,10 @@ netsh advfirewall firewall delete rule name="%RULE_NAME%" >nul 2>&1
 netsh advfirewall firewall add rule name="%RULE_NAME%" dir=in action=allow protocol=TCP localport=8181 profile=any remoteip=127.0.0.1 >nul
 echo    Firewall rule added (port 8181, localhost only).
 
-:: 5. Register for startup (current user)
+:: 5. Register for startup (all users)
 echo [5/6] Registering auto-start...
-reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /v "GuacamolePrintAgent" /t REG_SZ /d "wscript.exe \"%INSTALL_DIR%\StartHidden.vbs\"" /f >nul
-echo    Auto-start registered for current user.
+reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /v "GuacamolePrintAgent" /t REG_SZ /d "wscript.exe \"%INSTALL_DIR%\StartHidden.vbs\"" /f >nul
+echo    Auto-start registered for all users.
 
 :: 6. Start the agent
 echo [6/6] Starting Guacamole Print Agent (hidden)...

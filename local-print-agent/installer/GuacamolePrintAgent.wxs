@@ -37,8 +37,8 @@
         <Component Id="HiddenLauncher" Guid="A1B2C3D4-E5F6-7890-ABCD-EF0123456789">
           <File Id="StartHiddenVbs" Source="StartHidden.vbs" KeyPath="yes" />
 
-          <!-- Auto-start on login (current user registry) -->
-          <RegistryValue Root="HKCU"
+          <!-- Auto-start on login (all users) -->
+          <RegistryValue Root="HKLM"
                          Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
                          Name="GuacamolePrintAgent"
                          Type="string"
@@ -54,6 +54,9 @@
       </Directory>
     </StandardDirectory>
 
+    <!-- System directory for wscript.exe -->
+    <StandardDirectory Id="System64Folder" />
+
     <!-- Feature -->
     <Feature Id="Complete" Title="Guacamole Print Agent" Level="1">
       <ComponentRef Id="MainExecutable" />
@@ -62,16 +65,15 @@
       <ComponentRef Id="UninstallBat" />
     </Feature>
 
-    <!-- Launch agent after install using WiX v4 custom action -->
+    <!-- Launch agent after install: immediate action runs as installing user -->
     <CustomAction Id="LaunchAgent"
-                  Directory="INSTALLFOLDER"
-                  ExeCommand='wscript.exe "[INSTALLFOLDER]StartHidden.vbs"'
-                  Execute="deferred"
-                  Impersonate="yes"
+                  Directory="System64Folder"
+                  ExeCommand="wscript.exe &quot;[INSTALLFOLDER]StartHidden.vbs&quot;"
+                  Execute="immediate"
                   Return="asyncNoWait" />
 
     <InstallExecuteSequence>
-      <Custom Action="LaunchAgent" After="InstallFinalize" Condition="NOT Installed OR REINSTALL" />
+      <Custom Action="LaunchAgent" After="InstallFinalize" Condition="NOT REMOVE" />
     </InstallExecuteSequence>
 
   </Package>
