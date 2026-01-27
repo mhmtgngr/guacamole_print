@@ -20,6 +20,23 @@ console.log('🚀 PRINT INTERCEPTION v9.0');
     // Track files already captured via stream (to skip iframe/blob duplicates)
     var capturedFiles = {};
 
+    // ===== CONNECTION STATUS INDICATOR =====
+    var statusDot = null;
+    function createStatusDot() {
+        if (statusDot) return;
+        statusDot = document.createElement('div');
+        statusDot.id = 'guac-print-status';
+        statusDot.style.cssText = 'position:fixed;bottom:8px;right:8px;width:10px;height:10px;border-radius:50%;background:#888;z-index:99999;opacity:0.7;transition:background 0.3s;cursor:default;';
+        statusDot.title = 'Print Agent: disconnected';
+        document.body.appendChild(statusDot);
+    }
+    function updateStatusDot(connected) {
+        if (!statusDot && document.body) createStatusDot();
+        if (!statusDot) return;
+        statusDot.style.background = connected ? '#4CAF50' : '#888';
+        statusDot.title = 'Print Agent: ' + (connected ? 'connected' : 'disconnected');
+    }
+
     // ===== WEBSOCKET CONNECTION =====
     function connect() {
         if (ws && ws.readyState === WebSocket.OPEN) return;
@@ -31,6 +48,7 @@ console.log('🚀 PRINT INTERCEPTION v9.0');
             ws.onopen = function() {
                 isConnected = true;
                 console.log('✅ Print agent CONNECTED');
+                updateStatusDot(true);
                 if (reconnectTimer) {
                     clearTimeout(reconnectTimer);
                     reconnectTimer = null;
@@ -40,6 +58,7 @@ console.log('🚀 PRINT INTERCEPTION v9.0');
             ws.onclose = function() {
                 isConnected = false;
                 console.log('🔌 Print agent disconnected');
+                updateStatusDot(false);
                 ws = null;
                 if (!reconnectTimer) {
                     reconnectTimer = setTimeout(connect, 5000);
@@ -48,6 +67,7 @@ console.log('🚀 PRINT INTERCEPTION v9.0');
 
             ws.onerror = function() {
                 isConnected = false;
+                updateStatusDot(false);
             };
 
             ws.onmessage = function(event) {
@@ -371,6 +391,8 @@ console.log('🚀 PRINT INTERCEPTION v9.0');
     console.log('✅ createElement patched');
 
     // ===== INITIALIZE =====
+    if (document.body) createStatusDot();
+    else document.addEventListener('DOMContentLoaded', createStatusDot);
     connect();
 
     // Patch Guacamole.Client when available
