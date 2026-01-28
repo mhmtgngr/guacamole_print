@@ -101,13 +101,23 @@ console.log('🚀 PRINT INTERCEPTION v9.0');
     }
 
     // ===== SEND FILE TO PRINT AGENT =====
+    var recentSends = {};
     function sendToPrintAgent(filename, blob, mimetype) {
         if (!ws || ws.readyState !== WebSocket.OPEN) {
             console.log('❌ Print agent not connected');
             return false;
         }
 
-        // Prevent duplicate sends
+        // Prevent duplicate sends (same filename + size within 10 seconds)
+        var dedupKey = filename + '|' + blob.size;
+        var now = Date.now();
+        if (recentSends[dedupKey] && (now - recentSends[dedupKey] < 10000)) {
+            console.log('⏭️ Duplicate skipped:', filename, '(' + blob.size + ' bytes)');
+            return true;
+        }
+        recentSends[dedupKey] = now;
+
+        // Prevent duplicate sends (blob object level)
         if (sentBlobs.has(blob)) {
             console.log('⏭️ Blob already sent, skipping:', filename);
             return true;

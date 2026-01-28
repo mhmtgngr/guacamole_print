@@ -39,7 +39,7 @@ objShell.Run "powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -File "
 Set-Content -Path $vbsPath -Value $vbsContent
 Write-Host "  Created: $vbsPath" -ForegroundColor Green
 
-# Step 4: Create scheduled task for all users at logon
+# Step 4: Create scheduled task for all users at logon AND session reconnect
 Write-Host "[4/4] Creating scheduled task..." -ForegroundColor Yellow
 
 $taskName = "GuacamoleUserFileWatcher"
@@ -48,13 +48,21 @@ $taskName = "GuacamoleUserFileWatcher"
 Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
 
 $action = New-ScheduledTaskAction -Execute "wscript.exe" -Argument "`"$vbsPath`""
-$trigger = New-ScheduledTaskTrigger -AtLogOn
-$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Days 365)
+
+# Trigger on logon (new session)
+$triggerLogon = New-ScheduledTaskTrigger -AtLogOn
+
+# Trigger on session connect/reconnect (RDP reconnect)
+$triggerClass = Get-CimClass -ClassName MSFT_TaskSessionStateChangeTrigger -Namespace Root/Microsoft/Windows/TaskScheduler
+$triggerReconnect = New-CimInstance -CimClass $triggerClass -ClientOnly
+$triggerReconnect.StateChange = 8  # Session reconnect (TASK_SESSION_STATE_CHANGE_TYPE: 8 = remote connect)
+
+$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Days 365) -MultipleInstances IgnoreNew
 $principal = New-ScheduledTaskPrincipal -GroupId "BUILTIN\Users" -RunLevel Limited
 
-Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Description "Watches user profile folders and copies new files to GuacamoleDrive for transfer" | Out-Null
+Register-ScheduledTask -TaskName $taskName -Action $action -Trigger @($triggerLogon, $triggerReconnect) -Settings $settings -Principal $principal -Description "Watches user profile folders and copies new files to GuacamoleDrive for transfer" | Out-Null
 
-Write-Host "  Task '$taskName' created (runs at logon for all users)" -ForegroundColor Green
+Write-Host "  Task '$taskName' created (runs at logon + RDP reconnect for all users)" -ForegroundColor Green
 
 # Summary
 Write-Host "`n=== Installation Complete ===" -ForegroundColor Green

@@ -4,7 +4,7 @@
 
   <Package Name="Guacamole Print Agent"
            Manufacturer="Guacamole Print Solution"
-           Version="1.0.0.0"
+           Version="1.1.0.0"
            UpgradeCode="B748B3C5-C676-4B01-83F6-6D8DEE89DFE4"
            Scope="perMachine">
 
