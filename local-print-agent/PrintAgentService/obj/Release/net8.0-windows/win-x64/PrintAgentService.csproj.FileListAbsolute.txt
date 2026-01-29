@@ -1,5 +1,0 @@
-C:\Users\Mehmet\guacamole-print-solution\local-print-agent\PrintAgentService\obj\Release\net8.0-windows\win-x64\PrintAgentService.csproj.AssemblyReference.cache
-C:\Users\Mehmet\guacamole-print-solution\local-print-agent\PrintAgentService\obj\Release\net8.0-windows\win-x64\PrintAgentService.GeneratedMSBuildEditorConfig.editorconfig
-C:\Users\Mehmet\guacamole-print-solution\local-print-agent\PrintAgentService\obj\Release\net8.0-windows\win-x64\PrintAgentService.AssemblyInfoInputs.cache
-C:\Users\Mehmet\guacamole-print-solution\local-print-agent\PrintAgentService\obj\Release\net8.0-windows\win-x64\PrintAgentService.AssemblyInfo.cs
-C:\Users\Mehmet\guacamole-print-solution\local-print-agent\PrintAgentService\obj\Release\net8.0-windows\win-x64\PrintAgentService.csproj.CoreCompileInputs.cache

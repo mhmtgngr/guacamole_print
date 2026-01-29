@@ -1,11 +1,9 @@
 # Build outputs
-*.exe
-*.dll
+**/bin/
+**/obj/
 *.pdb
-*.obj/
-*.bin/
-Debug/
-Release/
+*.wixpdb
+*.msi
 
 # Node modules
 node_modules/
