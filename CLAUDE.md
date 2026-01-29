@@ -55,27 +55,32 @@ Local Print Agent (C# .NET 8, runs hidden in background)
 | `local-print-agent/build-installer.bat` | Builds self-contained EXE + MSI from source |
 | `dev/initdb/` | SQL scripts for PostgreSQL initialization |
 | `remote-server-scripts/UserFileWatcher.ps1` | PowerShell file watcher for RDP server - copies to `\\tsclient\GuacamoleDrive\Download` |
+| `remote-server-scripts/Install-UserFileWatcher.ps1` | Installer: creates scheduled task (logon + RDP reconnect triggers) |
+| `remote-server-scripts/Uninstall-FileWatcher.ps1` | Uninstaller: removes task, stops watchers, deletes install folder |
 
-## Current State (2026-01-27, branch: dev)
+## Current State (2026-01-29, branch: dev)
 
 ### What Works (CONFIRMED)
 - Docker stack runs (PostgreSQL, guacd with drive volume, Guacamole web on port 8080)
 - guacd init container sets `/drive` permissions (UID 1000) on every startup
 - Guacamole drive redirection: `\\tsclient\GuacamoleDrive` accessible in RDP sessions
-- C# print agent installs via single MSI file and runs hidden in background
-- Agent auto-starts on Windows login (registry + StartHidden.vbs)
+- C# print agent installs via single MSI file (v1.1.0.0) and runs hidden in background
+- Agent auto-starts on Windows login for **all users** (HKLM registry + StartHidden.vbs)
 - Windows Firewall rule added automatically (port 8181, localhost only)
 - Windows Defender exclusion added automatically
 - WebSocket connection established between browser and agent
+- **Browser connection indicator**: small green/gray dot in bottom-right corner shows agent status
 - `aggressive-intercept.js` v9.0 loaded inside WAR (no 404)
 - `Guacamole.Client.onfile` patched, stream.index >= 0 captures blob data directly
 - **Print data flows end-to-end**: JS captures bytes → sends via WS → C# receives → decodes → renders PDF
 - **Native Windows PrintDialog appears** with printer selection
 - PDF rendered at 300 DPI on-demand (pages rendered during print, not upfront)
-- **Non-PDF files open directly** with default Windows application (no dialog)
+- **Non-PDF files show Windows Save As dialog** (user picks save location)
 - Heartbeat ping/pong keeps connection alive
-- Duplicate sends prevented (stream capture marks file, iframe skips it)
-- ForceForeground with Alt-key trick brings print dialog to front
+- **Duplicate sends prevented**: filename+size dedup (10s window) + blob WeakSet + capturedFiles map
+- ForceForeground with Alt-key trick brings dialogs to front
+- **UserFileWatcher** on RDP servers: monitors user profile, copies to `\\tsclient\GuacamoleDrive\Download`
+- FileWatcher scheduled task triggers on both logon AND RDP reconnect
 
 ### MSI Installer
 
@@ -86,7 +91,7 @@ Single file: `local-print-agent/installer/GuacamolePrintAgent.msi` (65 MB)
 - Self-contained EXE (no .NET runtime required on target machine)
 - Adds Windows Firewall rule (port 8181, localhost only)
 - Adds Windows Defender exclusion (folder + process)
-- Registers auto-start on login (HKCU Run key via StartHidden.vbs)
+- Registers auto-start on login for all users (HKLM Run key via StartHidden.vbs)
 - Runs agent hidden (no console window)
 
 **Usage:**
@@ -144,13 +149,11 @@ The `docker-compose.yml` includes:
 | guacd drive permission denied | `/drive` owned by root, guacd runs as UID 1000 | Init container sets ownership before guacd starts |
 | Agent exe blocked by Defender | Exclusion added after file copy | Exclusion now added BEFORE copying exe |
 | Agent shows console window | EXE runs with visible console | StartHidden.vbs launches with window style 0 |
-| Non-PDF shows save/cancel dialog | WinForms dialog for all non-PDF | Non-PDF files now open directly with default app |
-
-### Remaining Issues
-
-1. **Two scripts may conflict** - `aggressive-intercept.js` and `print-agent-client.js` both run; consider disabling `print-agent-client.js`
-2. **Message type mismatch** - `print-agent-client.js` sends `type: 'fileTransfer'` (camelCase), C# expects `type: 'file_transfer'` (snake_case)
-3. **MSI custom action** - Auto-launch after silent install (`/qn`) doesn't fire; agent starts on next login or manually via VBS
+| Non-PDF shows save/cancel dialog | WinForms dialog for all non-PDF | Non-PDF files now show Windows Save As dialog |
+| Save dialog appears 6-7 times | Multiple JS layers send same file | Added filename+size dedup with 10s window |
+| MSI upgrade doesn't replace EXE | Same version number (1.0.0.0) | Bumped to 1.1.0.0 |
+| Auto-start only for installing user | HKCU registry key | Changed to HKLM (all users) |
+| FileWatcher not starting on RDP reconnect | AtLogOn only fires on new logon | Added session state change trigger (type 8) |
 
 ## How Things Are Built & Deployed
 
@@ -227,8 +230,10 @@ Three layers + dedup + heartbeat:
 
 ### Non-PDF File Flow
 1. Same decode + save as PDF
-2. `Process.Start` with `UseShellExecute = true` - opens with default Windows application
-3. Fallback: opens containing folder in Explorer if no app registered
+2. Show Windows `SaveFileDialog` on STA thread with `ForceForeground`
+3. File filter based on extension (Excel, Word, PowerPoint, images, etc.)
+4. Default location: Desktop
+5. User picks save location → file copied from temp to chosen path
 
 ### WebSocket Message Types
 | Type | Direction | Purpose |
@@ -284,6 +289,18 @@ docker stop guacamole-client guacamole-nginx guacamole-server guacamole-db
 | Installer | WiX Toolset 6.0 (MSI) + batch scripts |
 | Background Launch | VBScript (StartHidden.vbs, window style 0) |
 | Remote Monitor | PowerShell 5.1+ (UserFileWatcher.ps1) |
+
+## Deploying to Another Project
+
+To add print/file transfer to an existing Guacamole deployment:
+
+1. Create `guacamole-custom/` folder with `Dockerfile`, `aggressive-intercept.js`, `start-aggressive-print.sh` from `dev/`
+2. Change guacamole service from `image:` to `build: ./guacamole-custom`
+3. Add `./drive:/drive` volume to guacd service
+4. `docker-compose up -d --build`
+5. Configure RDP connections: Enable Drive, Drive Path `/drive`, Drive Name `GuacamoleDrive`
+6. Install `GuacamolePrintAgent.msi` on each client PC
+7. (Optional) Install `UserFileWatcher` on RDP servers for auto file transfer
 
 ## Project Cleanup (2026-01-27)
 
