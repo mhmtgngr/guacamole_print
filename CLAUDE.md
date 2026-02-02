@@ -52,19 +52,23 @@ Local Print Agent (C# .NET 8, runs hidden in background)
 | `local-print-agent/installer/Install.bat` | Batch installer (alternative to MSI) |
 | `local-print-agent/installer/Uninstall.bat` | Batch uninstaller |
 | `local-print-agent/installer/StartHidden.vbs` | VBScript launcher - runs agent with no console window |
+| `local-print-agent/installer/DefenderSetup.vbs` | VBScript - adds Defender exclusions with UAC elevation |
+| `local-print-agent/installer/DefenderRemove.vbs` | VBScript - removes Defender exclusions with UAC elevation |
+| `local-print-agent/installer/DefenderSetup.bat` | Batch - adds Defender exclusions (self-elevating) |
+| `local-print-agent/installer/DefenderRemove.bat` | Batch - removes Defender exclusions (self-elevating) |
 | `local-print-agent/build-installer.bat` | Builds self-contained EXE + MSI from source |
 | `dev/initdb/` | SQL scripts for PostgreSQL initialization |
 | `remote-server-scripts/UserFileWatcher.ps1` | PowerShell file watcher for RDP server - copies to `\\tsclient\GuacamoleDrive\Download` |
 | `remote-server-scripts/Install-UserFileWatcher.ps1` | Installer: creates scheduled task (logon + RDP reconnect triggers) |
 | `remote-server-scripts/Uninstall-FileWatcher.ps1` | Uninstaller: removes task, stops watchers, deletes install folder |
 
-## Current State (2026-01-29, branch: dev)
+## Current State (2026-01-30, branch: dev)
 
 ### What Works (CONFIRMED)
 - Docker stack runs (PostgreSQL, guacd with drive volume, Guacamole web on port 8080)
 - guacd init container sets `/drive` permissions (UID 1000) on every startup
 - Guacamole drive redirection: `\\tsclient\GuacamoleDrive` accessible in RDP sessions
-- C# print agent installs via single MSI file (v1.1.0.0) and runs hidden in background
+- C# print agent installs via single MSI file (v2.2.0.0) and runs hidden in background
 - Agent auto-starts on Windows login for **all users** (HKLM registry + StartHidden.vbs)
 - Windows Firewall rule added automatically (port 8181, localhost only)
 - Windows Defender exclusion added automatically
@@ -84,15 +88,35 @@ Local Print Agent (C# .NET 8, runs hidden in background)
 
 ### MSI Installer
 
-Single file: `local-print-agent/installer/GuacamolePrintAgent.msi` (65 MB)
+Single file: `local-print-agent/installer/GuacamolePrintAgent.msi` (~65 MB)
+Version: **2.2.0.0** (WiX v4, UpgradeCode: `B748B3C5-C676-4B01-83F6-6D8DEE89DFE4`)
 
-**What it does:**
-- Installs to `C:\Program Files\GuacamolePrintAgent\`
-- Self-contained EXE (no .NET runtime required on target machine)
-- Adds Windows Firewall rule (port 8181, localhost only)
-- Adds Windows Defender exclusion (folder + process)
-- Registers auto-start on login for all users (HKLM Run key via StartHidden.vbs)
-- Runs agent hidden (no console window)
+**What it does on install:**
+1. Installs files to `C:\Program Files\GuacamolePrintAgent\` (8 files)
+2. Self-contained EXE (no .NET runtime required on target machine)
+3. Adds Windows Firewall rule (port 8181, inbound, localSubnet) via WiX Firewall extension
+4. Adds Windows Defender exclusions (folder path + process name) via `DefenderSetup.vbs`
+5. Registers auto-start on login for all users (HKLM Run key via StartHidden.vbs)
+6. Launches agent hidden (no console window) via `StartHidden.vbs`
+
+**What it does on uninstall:**
+1. Stops running `GuacamolePrintAgent.exe` process (deferred CA with `taskkill /F`)
+2. Removes Defender exclusions via `DefenderRemove.vbs`
+3. Removes all installed files and install folder
+4. Removes HKLM auto-start registry key
+5. Removes Windows Firewall rule
+
+**Installed files:**
+| File | Purpose |
+|------|---------|
+| `GuacamolePrintAgent.exe` | Main agent (~195 MB, self-contained .NET 8) |
+| `appsettings.json` | ASP.NET Core configuration |
+| `StartHidden.vbs` | Launches agent with window style 0 (hidden) |
+| `Uninstall.bat` | Manual uninstaller (alternative) |
+| `DefenderSetup.bat` | Adds Defender exclusions (self-elevating) |
+| `DefenderSetup.vbs` | Adds Defender exclusions via ShellExecute runas |
+| `DefenderRemove.bat` | Removes Defender exclusions (self-elevating) |
+| `DefenderRemove.vbs` | Removes Defender exclusions via ShellExecute runas |
 
 **Usage:**
 ```
@@ -115,6 +139,16 @@ cd local-print-agent
 build-installer.bat
 ```
 Requires: .NET 8 SDK, WiX Toolset 6.0+ (`dotnet tool install -g wix`, `wix extension add WixToolset.Firewall.wixext`)
+
+**WiX Custom Actions:**
+| Action | Type | When | Purpose |
+|--------|------|------|---------|
+| `StopAgent` | Deferred, SYSTEM | Before RemoveFiles (uninstall/upgrade) | `taskkill /IM GuacamolePrintAgent.exe /F` |
+| `AddDefenderExclusions` | Immediate, asyncNoWait | After InstallFinalize (install) | `wscript.exe DefenderSetup.vbs` (UAC elevation) |
+| `RemoveDefenderExclusions` | Immediate, asyncNoWait | After StopAgent (uninstall) | `wscript.exe DefenderRemove.vbs` (UAC elevation) |
+| `LaunchAgent` | Immediate, asyncNoWait | After AddDefenderExclusions (install) | `wscript.exe StartHidden.vbs` |
+
+**Note on Defender exclusions:** MSI deferred custom actions (running as SYSTEM) cannot execute `Add-MpPreference` / `Remove-MpPreference`. The solution uses VBScript with `ShellExecute "runas"` to properly elevate through Windows UAC. This is the same pattern used by `StartHidden.vbs`.
 
 ### Docker Drive Configuration
 
@@ -154,6 +188,10 @@ The `docker-compose.yml` includes:
 | MSI upgrade doesn't replace EXE | Same version number (1.0.0.0) | Bumped to 1.1.0.0 |
 | Auto-start only for installing user | HKCU registry key | Changed to HKLM (all users) |
 | FileWatcher not starting on RDP reconnect | AtLogOn only fires on new logon | Added session state change trigger (type 8) |
+| WebSocket connect/disconnect loop | Docker OPA container (`openidx-opa`) also listening on port 8181 | Changed OPA port mapping to 8281 |
+| MSI uninstall leaves files behind | No custom action to stop agent before file removal; EXE locked | Added `StopAgent` deferred CA with `taskkill /F` before RemoveFiles |
+| MSI doesn't add Defender exclusions | MSI deferred CAs (SYSTEM) can't run `Add-MpPreference` | VBScript with `ShellExecute "runas"` for proper UAC elevation |
+| MSI doesn't remove Defender on uninstall | No uninstall CA for Defender | Added `RemoveDefenderExclusions` CA via `DefenderRemove.vbs` |
 
 ## How Things Are Built & Deployed
 

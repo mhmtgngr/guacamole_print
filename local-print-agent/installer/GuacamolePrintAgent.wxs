@@ -4,7 +4,7 @@
 
   <Package Name="Guacamole Print Agent"
            Manufacturer="Guacamole Print Solution"
-           Version="1.1.0.0"
+           Version="2.2.0.0"
            UpgradeCode="B748B3C5-C676-4B01-83F6-6D8DEE89DFE4"
            Scope="perMachine">
 
@@ -51,6 +51,14 @@
           <File Id="UninstallFile" Source="Uninstall.bat" KeyPath="yes" />
         </Component>
 
+        <!-- Defender setup/remove scripts -->
+        <Component Id="DefenderScripts" Guid="C3D4E5F6-A7B8-9012-CDEF-345678901234">
+          <File Id="DefenderSetupBat" Source="DefenderSetup.bat" KeyPath="yes" />
+          <File Id="DefenderRemoveBat" Source="DefenderRemove.bat" />
+          <File Id="DefenderSetupVbs" Source="DefenderSetup.vbs" />
+          <File Id="DefenderRemoveVbs" Source="DefenderRemove.vbs" />
+        </Component>
+
       </Directory>
     </StandardDirectory>
 
@@ -63,9 +71,32 @@
       <ComponentRef Id="ConfigFile" />
       <ComponentRef Id="HiddenLauncher" />
       <ComponentRef Id="UninstallBat" />
+      <ComponentRef Id="DefenderScripts" />
     </Feature>
 
-    <!-- Launch agent after install: immediate action runs as installing user -->
+    <!-- Stop agent before uninstall/upgrade so files are unlocked -->
+    <CustomAction Id="StopAgent"
+                  Directory="System64Folder"
+                  ExeCommand="cmd.exe /c &quot;taskkill /IM GuacamolePrintAgent.exe /F &amp; timeout /t 2 /nobreak&quot;"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+
+    <!-- Add Defender exclusions on install (VBS ShellExecute runas for proper elevation) -->
+    <CustomAction Id="AddDefenderExclusions"
+                  Directory="System64Folder"
+                  ExeCommand="wscript.exe &quot;[INSTALLFOLDER]DefenderSetup.vbs&quot;"
+                  Execute="immediate"
+                  Return="asyncNoWait" />
+
+    <!-- Remove Defender exclusions on uninstall -->
+    <CustomAction Id="RemoveDefenderExclusions"
+                  Directory="System64Folder"
+                  ExeCommand="wscript.exe &quot;[INSTALLFOLDER]DefenderRemove.vbs&quot;"
+                  Execute="immediate"
+                  Return="asyncNoWait" />
+
+    <!-- Launch agent after install -->
     <CustomAction Id="LaunchAgent"
                   Directory="System64Folder"
                   ExeCommand="wscript.exe &quot;[INSTALLFOLDER]StartHidden.vbs&quot;"
@@ -73,7 +104,14 @@
                   Return="asyncNoWait" />
 
     <InstallExecuteSequence>
-      <Custom Action="LaunchAgent" After="InstallFinalize" Condition="NOT REMOVE" />
+      <!-- Stop agent before removing files (runs on uninstall and upgrade) -->
+      <Custom Action="StopAgent" Before="RemoveFiles" Condition="REMOVE OR WIX_UPGRADE_DETECTED" />
+      <!-- Remove Defender exclusions before uninstall -->
+      <Custom Action="RemoveDefenderExclusions" After="StopAgent" Condition="REMOVE=&quot;ALL&quot;" />
+      <!-- Add Defender exclusions after install is done -->
+      <Custom Action="AddDefenderExclusions" After="InstallFinalize" Condition="NOT REMOVE" />
+      <!-- Launch agent after Defender setup -->
+      <Custom Action="LaunchAgent" After="AddDefenderExclusions" Condition="NOT REMOVE" />
     </InstallExecuteSequence>
 
   </Package>

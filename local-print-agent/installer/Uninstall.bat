@@ -37,6 +37,7 @@ echo    Defender exclusion removed.
 
 :: 4. Remove startup entry
 echo [4/4] Removing auto-start...
+reg delete "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /v "GuacamolePrintAgent" /f >nul 2>&1
 reg delete "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /v "GuacamolePrintAgent" /f >nul 2>&1
 echo    Auto-start removed.
 
