@@ -20,21 +20,27 @@ console.log('🚀 PRINT INTERCEPTION v9.0');
     // Track files already captured via stream (to skip iframe/blob duplicates)
     var capturedFiles = {};
 
-    // ===== CONNECTION STATUS INDICATOR =====
-    var statusDot = null;
+    // ===== CONNECTION STATUS INDICATOR (Print Icon - Bottom Left) =====
+    var statusIcon = null;
     function createStatusDot() {
-        if (statusDot) return;
-        statusDot = document.createElement('div');
-        statusDot.id = 'guac-print-status';
-        statusDot.style.cssText = 'position:fixed;bottom:8px;right:8px;width:10px;height:10px;border-radius:50%;background:#888;z-index:99999;opacity:0.7;transition:background 0.3s;cursor:default;';
-        statusDot.title = 'Print Agent: disconnected';
-        document.body.appendChild(statusDot);
+        if (statusIcon) return;
+        statusIcon = document.createElement('div');
+        statusIcon.id = 'guac-print-status';
+        statusIcon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+            + '<polyline points="6 9 6 2 18 2 18 9"/>'
+            + '<path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>'
+            + '<rect x="6" y="14" width="12" height="8"/>'
+            + '</svg>';
+        statusIcon.style.cssText = 'position:fixed;bottom:10px;left:10px;width:36px;height:36px;border-radius:8px;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;cursor:default;transition:background 0.3s,color 0.3s;color:#888;';
+        statusIcon.title = 'Print Agent: disconnected';
+        document.body.appendChild(statusIcon);
     }
     function updateStatusDot(connected) {
-        if (!statusDot && document.body) createStatusDot();
-        if (!statusDot) return;
-        statusDot.style.background = connected ? '#4CAF50' : '#888';
-        statusDot.title = 'Print Agent: ' + (connected ? 'connected' : 'disconnected');
+        if (!statusIcon && document.body) createStatusDot();
+        if (!statusIcon) return;
+        statusIcon.style.color = connected ? '#4CAF50' : '#888';
+        statusIcon.style.background = connected ? 'rgba(76,175,80,0.15)' : 'rgba(0,0,0,0.5)';
+        statusIcon.title = 'Print Agent: ' + (connected ? 'connected' : 'disconnected');
     }
 
     // ===== WEBSOCKET CONNECTION =====
