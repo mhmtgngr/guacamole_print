@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guacamole Yazici Ajan - Kullanici Kilavuzu</title>
+    <style>
+        /* ===== RESET & BASE ===== */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.7;
+            color: #2c3e50;
+            background: #f8f9fa;
+            font-size: 14px;
+        }
+
+        /* ===== PRINT STYLES ===== */
+        @media print {
+            body { background: white; font-size: 11pt; }
+            .container { max-width: 100%; padding: 0; box-shadow: none; }
+            .page-break { page-break-before: always; }
+            .no-print { display: none !important; }
+            .screenshot { max-width: 100%; border: 1px solid #ccc; }
+            h1, h2, h3 { page-break-after: avoid; }
+            .step-card { break-inside: avoid; page-break-inside: avoid; }
+            .info-box, .warning-box, .success-box { break-inside: avoid; }
+            @page { margin: 2cm; size: A4; }
+        }
+
+        /* ===== LAYOUT ===== */
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px 50px;
+            box-shadow: 0 0 30px rgba(0,0,0,0.08);
+        }
+
+        /* ===== COVER PAGE ===== */
+        .cover {
+            text-align: center;
+            padding: 60px 0 40px;
+            border-bottom: 3px solid #2980b9;
+            margin-bottom: 40px;
+        }
+        .cover-icon {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 20px;
+            background: #2980b9;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .cover-icon svg { color: white; }
+        .cover h1 {
+            font-size: 28px;
+            color: #2c3e50;
+            margin-bottom: 8px;
+            font-weight: 700;
+        }
+        .cover .subtitle {
+            font-size: 16px;
+            color: #7f8c8d;
+            margin-bottom: 20px;
+        }
+        .cover .version {
+            display: inline-block;
+            background: #ecf0f1;
+            padding: 4px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            color: #555;
+        }
+
+        /* ===== TABLE OF CONTENTS ===== */
+        .toc {
+            background: #f0f4f8;
+            border-radius: 8px;
+            padding: 24px 30px;
+            margin-bottom: 40px;
+        }
+        .toc h2 {
+            font-size: 18px;
+            margin-bottom: 12px;
+            color: #2980b9;
+        }
+        .toc ol {
+            padding-left: 20px;
+        }
+        .toc li {
+            padding: 4px 0;
+            font-size: 14px;
+        }
+        .toc a {
+            color: #2c3e50;
+            text-decoration: none;
+        }
+        .toc a:hover { color: #2980b9; text-decoration: underline; }
+
+        /* ===== HEADINGS ===== */
+        h2 {
+            font-size: 22px;
+            color: #2980b9;
+            border-bottom: 2px solid #e8edf2;
+            padding-bottom: 8px;
+            margin: 40px 0 20px;
+        }
+        h3 {
+            font-size: 17px;
+            color: #34495e;
+            margin: 24px 0 12px;
+        }
+
+        /* ===== STEP CARDS ===== */
+        .step-card {
+            background: #fdfdfd;
+            border: 1px solid #e8edf2;
+            border-left: 4px solid #2980b9;
+            border-radius: 6px;
+            padding: 20px 24px;
+            margin: 16px 0;
+        }
+        .step-card .step-number {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            line-height: 30px;
+            text-align: center;
+            background: #2980b9;
+            color: white;
+            border-radius: 50%;
+            font-weight: bold;
+            font-size: 14px;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        .step-card .step-title {
+            font-weight: 600;
+            font-size: 15px;
+            color: #2c3e50;
+            vertical-align: middle;
+        }
+        .step-card .step-content {
+            margin-top: 12px;
+            padding-left: 40px;
+        }
+
+        /* ===== INFO BOXES ===== */
+        .info-box, .warning-box, .success-box, .danger-box {
+            border-radius: 6px;
+            padding: 14px 18px;
+            margin: 14px 0;
+            font-size: 13px;
+        }
+        .info-box {
+            background: #e8f4fd;
+            border-left: 4px solid #3498db;
+            color: #1a5276;
+        }
+        .warning-box {
+            background: #fef9e7;
+            border-left: 4px solid #f39c12;
+            color: #7d6608;
+        }
+        .success-box {
+            background: #eafaf1;
+            border-left: 4px solid #27ae60;
+            color: #1e8449;
+        }
+        .danger-box {
+            background: #fdedec;
+            border-left: 4px solid #e74c3c;
+            color: #922b21;
+        }
+        .info-box strong, .warning-box strong, .success-box strong, .danger-box strong {
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        /* ===== SCREENSHOTS ===== */
+        .screenshot-wrapper {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .screenshot {
+            max-width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .screenshot-caption {
+            font-size: 12px;
+            color: #888;
+            margin-top: 8px;
+            font-style: italic;
+        }
+
+        /* ===== CODE BLOCKS ===== */
+        code {
+            background: #f0f3f6;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 13px;
+            color: #c0392b;
+        }
+        pre {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 16px 20px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-size: 13px;
+            line-height: 1.5;
+            margin: 12px 0;
+        }
+        pre code {
+            background: none;
+            color: inherit;
+            padding: 0;
+        }
+
+        /* ===== TABLES ===== */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 14px 0;
+            font-size: 13px;
+        }
+        th, td {
+            padding: 10px 14px;
+            text-align: left;
+            border: 1px solid #e0e5ea;
+        }
+        th {
+            background: #f0f4f8;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        tr:nth-child(even) { background: #fafbfc; }
+
+        /* ===== LISTS ===== */
+        ul, ol { padding-left: 24px; margin: 8px 0; }
+        li { margin: 4px 0; }
+
+        /* ===== ARCHITECTURE DIAGRAM ===== */
+        .architecture {
+            background: #f8f9fa;
+            border: 1px solid #e0e5ea;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', monospace;
+            font-size: 12px;
+            line-height: 1.6;
+            white-space: pre;
+            overflow-x: auto;
+        }
+
+        /* ===== STATUS INDICATOR DEMO ===== */
+        .status-demo {
+            display: flex;
+            gap: 40px;
+            justify-content: center;
+            margin: 20px 0;
+        }
+        .status-item {
+            text-align: center;
+        }
+        .status-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 8px;
+        }
+        .status-icon.connected {
+            background: rgba(76,175,80,0.15);
+            color: #4CAF50;
+        }
+        .status-icon.disconnected {
+            background: rgba(0,0,0,0.5);
+            color: #888;
+        }
+        .status-label {
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        /* ===== FOOTER ===== */
+        .footer {
+            text-align: center;
+            padding: 30px 0 10px;
+            margin-top: 40px;
+            border-top: 1px solid #e8edf2;
+            color: #aaa;
+            font-size: 12px;
+        }
+
+        /* ===== FLOW DIAGRAM ===== */
+        .flow-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            margin: 16px 0;
+        }
+        .flow-step {
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            padding: 10px 0;
+        }
+        .flow-dot {
+            width: 24px;
+            height: 24px;
+            min-width: 24px;
+            border-radius: 50%;
+            background: #2980b9;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            margin-top: 2px;
+        }
+        .flow-arrow {
+            text-align: center;
+            color: #bdc3c7;
+            font-size: 16px;
+            padding: 0 0 0 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+
+        <!-- ===== COVER PAGE ===== -->
+        <div class="cover">
+            <div class="cover-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 6 2 18 2 18 9"/>
+                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+                    <rect x="6" y="14" width="12" height="8"/>
+                </svg>
+            </div>
+            <h1>Guacamole Yazici Ajan</h1>
+            <p class="subtitle">Kullanici Kilavuzu</p>
+            <span class="version">Surum 2.2.0 &mdash; Subat 2026</span>
+        </div>
+
+        <!-- ===== TABLE OF CONTENTS ===== -->
+        <div class="toc">
+            <h2>Icindekiler</h2>
+            <ol>
+                <li><a href="#genel-bakis">Genel Bakis</a></li>
+                <li><a href="#gereksinimler">Gereksinimler</a></li>
+                <li><a href="#kurulum">Kurulum Adimlari</a></li>
+                <li><a href="#giris">Guacamole'a Giris (OIDC)</a></li>
+                <li><a href="#yazdirma">Yazdirma ve Dosya Indirme</a></li>
+                <li><a href="#dogrulama">Kurulum Dogrulama</a></li>
+                <li><a href="#sorun-giderme">Sorun Giderme</a></li>
+                <li><a href="#kaldirma">Programi Kaldirma</a></li>
+            </ol>
+        </div>
+
+        <!-- ===== 1. GENEL BAKIS ===== -->
+        <h2 id="genel-bakis">1. Genel Bakis</h2>
+
+        <p>
+            <strong>Guacamole Yazici Ajan</strong>, Apache Guacamole uzerinden actiginiz uzak masaustu (RDP)
+            oturumlarindan yerel yaziciya yazdirma ve dosya indirme islemlerini kolaylastiran bir yazilimdir.
+        </p>
+
+        <p>Sistem su sekilde calisir:</p>
+
+        <div class="architecture">  Uzak Masaustu (RDP Oturumu)
+        |
+        v
+  Guacamole Web Arayuzu (Tarayici)
+        |
+        |  Dosya / yazdir komutu algilanir
+        |  JavaScript otomatik yakalar
+        v
+  WebSocket (ws://localhost:8181)
+        |
+        v
+  Yerel Yazici Ajan (Bilgisayarinizda calisan program)
+        |
+   +---------+-----------+
+   |         |           |
+  Yazici  Kaydet    Varsayilan
+  Dialogu  Dialogu   Uygulama</div>
+
+        <div class="info-box">
+            <strong>Nasil Calisir?</strong>
+            Guacamole uzerinden bir dosya indirdiginizde veya yazdir komutunu kullandiginizda,
+            sistem dosyayi otomatik olarak bilgisayarinizdaki ajana gonderir. PDF dosyalari icin
+            yazici secim ekrani, diger dosyalar icin "Farkli Kaydet" penceresi acilir.
+        </div>
+
+        <!-- ===== 2. GEREKSINIMLER ===== -->
+        <h2 id="gereksinimler" class="page-break">2. Gereksinimler</h2>
+
+        <table>
+            <tr>
+                <th style="width:200px">Gereksinim</th>
+                <th>Aciklama</th>
+            </tr>
+            <tr>
+                <td>Isletim Sistemi</td>
+                <td>Windows 10 veya Windows 11 (64-bit)</td>
+            </tr>
+            <tr>
+                <td>Web Tarayici</td>
+                <td>Google Chrome, Microsoft Edge veya Firefox (guncel surum)</td>
+            </tr>
+            <tr>
+                <td>Ag Erisimi</td>
+                <td>Guacamole sunucusuna erisim: <code>https://rguac.tdv.org:9443</code></td>
+            </tr>
+            <tr>
+                <td>Yonetici Yetkisi</td>
+                <td>Kurulum icin bir kerelik yonetici (Administrator) yetkisi gereklidir</td>
+            </tr>
+            <tr>
+                <td>Port</td>
+                <td><code>8181</code> portu yerel bilgisayarda acik olmalidir</td>
+            </tr>
+        </table>
+
+        <div class="warning-box">
+            <strong>Not:</strong>
+            .NET calisma zamani (runtime) kurulumu gerekmez. Program tum bagimliliklariyla birlikte
+            tek dosya halinde paketlenmistir.
+        </div>
+
+        <!-- ===== 3. KURULUM ===== -->
+        <h2 id="kurulum" class="page-break">3. Kurulum Adimlari</h2>
+
+        <h3>3.1 MSI Dosyasini Edinin</h3>
+
+        <div class="step-card">
+            <span class="step-number">1</span>
+            <span class="step-title">Kurulum dosyasini indirin veya kopyalayin</span>
+            <div class="step-content">
+                <p>IT biriminizden <code>GuacamolePrintAgent.msi</code> dosyasini edinin
+                (yaklasik 65 MB). Dosyayi masaustunuze veya istediginiz bir klasore kaydedin.</p>
+            </div>
+        </div>
+
+        <h3>3.2 Kurulumu Baslatin</h3>
+
+        <div class="step-card">
+            <span class="step-number">2</span>
+            <span class="step-title">MSI dosyasina cift tiklayin</span>
+            <div class="step-content">
+                <p><code>GuacamolePrintAgent.msi</code> dosyasina cift tiklayarak kurulumu baslatin.</p>
+            </div>
+        </div>
+
+        <div class="step-card">
+            <span class="step-number">3</span>
+            <span class="step-title">Yonetici iznini onaylayin</span>
+            <div class="step-content">
+                <p>Windows "Kullanici Hesabi Denetimi" (UAC) penceresi acilacaktir.
+                <strong>"Evet"</strong> diyerek yonetici izni verin.</p>
+                <div class="warning-box">
+                    <strong>Onemli:</strong> "Hayir" derseniz kurulum yapilamaz. Program, guvenlik duvari
+                    kurallari ve Windows Defender istisnalari eklemek icin yonetici yetkisine ihtiyac duyar.
+                </div>
+            </div>
+        </div>
+
+        <div class="step-card">
+            <span class="step-number">4</span>
+            <span class="step-title">Kurulum tamamlandi</span>
+            <div class="step-content">
+                <p>Kurulum otomatik olarak tamamlanir. Asagidaki islemler arka planda gerceklesir:</p>
+                <table>
+                    <tr>
+                        <th>Islem</th>
+                        <th>Aciklama</th>
+                    </tr>
+                    <tr>
+                        <td>Dosya kopyalama</td>
+                        <td><code>C:\Program Files\GuacamolePrintAgent\</code> klasorune kurulum</td>
+                    </tr>
+                    <tr>
+                        <td>Guvenlik Duvari</td>
+                        <td>Port 8181 icin kural eklenir</td>
+                    </tr>
+                    <tr>
+                        <td>Windows Defender</td>
+                        <td>Program icin istisna eklenir</td>
+                    </tr>
+                    <tr>
+                        <td>Otomatik baslatma</td>
+                        <td>Her Windows girisi otomatik calisir</td>
+                    </tr>
+                    <tr>
+                        <td>Ajan baslatma</td>
+                        <td>Program hemen arka planda baslar</td>
+                    </tr>
+                </table>
+
+                <div class="success-box">
+                    <strong>Kurulum tamamlandi!</strong>
+                    Program arka planda calismaya basladi. Bilgisayarinizi her actiginizda
+                    otomatik olarak baslar. Herhangi bir sey yapmaniz gerekmez.
+                </div>
+            </div>
+        </div>
+
+        <h3>3.3 Sessiz Kurulum (IT Yoneticileri Icin)</h3>
+        <p>Toplu dagitim icin komut satirindan sessiz kurulum:</p>
+        <pre><code>msiexec /i GuacamolePrintAgent.msi /qn</code></pre>
+        <p>Kurulum sonrasi ajanin hemen baslatilmasi icin:</p>
+        <pre><code>wscript.exe "C:\Program Files\GuacamolePrintAgent\StartHidden.vbs"</code></pre>
+
+        <!-- ===== 4. GUACAMOLE'A GIRIS ===== -->
+        <h2 id="giris" class="page-break">4. Guacamole'a Giris (OIDC)</h2>
+
+        <div class="step-card">
+            <span class="step-number">1</span>
+            <span class="step-title">Tarayicida Guacamole adresini acin</span>
+            <div class="step-content">
+                <p>Web tarayicinizda asagidaki adresi acin:</p>
+                <pre><code>https://rguac.tdv.org:9443/guacamole/#/</code></pre>
+                <p>Guacamole sizi otomatik olarak kurumsal <strong>ADFS giris sayfasina</strong> yonlendirecektir.</p>
+                <div class="screenshot-wrapper">
+                    <img class="screenshot" src="screenshots/01-adfs-giris.png" alt="ADFS giris sayfasi">
+                    <p class="screenshot-caption">TDV Giris Portali - Kurumsal e-posta adresinizi girin</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="step-card">
+            <span class="step-number">2</span>
+            <span class="step-title">Kurumsal sifrenizi girin</span>
+            <div class="step-content">
+                <p>ADFS sayfasindan sonra <strong>Turkiye Diyanet Vakfi</strong> kimlik dogrulama sayfasina
+                yonlendirilirsiniz. Kurumsal sifrenizi girerek oturum acin.</p>
+                <div class="screenshot-wrapper">
+                    <img class="screenshot" src="screenshots/02-tdv-giris.png" alt="TDV giris sayfasi">
+                    <p class="screenshot-caption">TDV kimlik dogrulama sayfasi - Sifrenizi girin</p>
+                </div>
+                <div class="info-box">
+                    <strong>ADFS Nedir?</strong>
+                    Kurumunuzun merkezi kimlik dogrulama sistemidir (Active Directory Federation Services).
+                    Guacamole adresi acildiginda otomatik olarak bu giris sayfasina yonlendirilirsiniz.
+                    Basarili giris sonrasi Guacamole anasayfasina otomatik doneceksiniz.
+                </div>
+            </div>
+        </div>
+
+        <div class="step-card">
+            <span class="step-number">3</span>
+            <span class="step-title">Anasayfa ve Baglantilari Gorun</span>
+            <div class="step-content">
+                <p>Basarili giris sonrasi Guacamole anasayfasini goreceksiniz.
+                Burada size tanimli RDP baglantilari listelenir.</p>
+                <div class="screenshot-wrapper">
+                    <img class="screenshot" src="screenshots/03-anasayfa.png" alt="Guacamole anasayfa">
+                    <p class="screenshot-caption">Guacamole anasayfasi - Baglanti listesi ve sol altta yesil yazici ikonu</p>
+                </div>
+                <div class="success-box">
+                    <strong>Yazici ikonu yesil!</strong>
+                    Sol alt kosede yesil yazici simgesi gorunuyorsa, yazici ajan bilgisayarinizda
+                    calisiyor ve baglanti basarili demektir.
+                </div>
+            </div>
+        </div>
+
+        <div class="step-card">
+            <span class="step-number">4</span>
+            <span class="step-title">RDP Baglantisina Tiklayin</span>
+            <div class="step-content">
+                <p>Listeden istediginiz uzak masaustu baglantisina tiklayarak oturumu baslatin.
+                RDP sunucusuna baglanmak icin sifrenizi girmeniz istenebilir.</p>
+                <div class="screenshot-wrapper">
+                    <img class="screenshot" src="screenshots/04-rdp-sifre.png" alt="RDP sifre girisi">
+                    <p class="screenshot-caption">RDP baglantisi sifre ekrani - Sifrenizi girip "Continue" tiklayin</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="step-card">
+            <span class="step-number">5</span>
+            <span class="step-title">Uzak Masaustunde Calisin</span>
+            <div class="step-content">
+                <p>Baglanti kurulduktan sonra uzak masaustu uygulamalarinizi kullanabilirsiniz.
+                Dosya indirme ve yazdirma islemleri otomatik olarak yerel bilgisayariniza iletilir.</p>
+                <div class="screenshot-wrapper">
+                    <img class="screenshot" src="screenshots/05-rdp-uygulama.png" alt="RDP uygulama ekrani">
+                    <p class="screenshot-caption">Uzak masaustunde uygulama ekrani (Nebim V3)</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== 5. YAZDIRMA ===== -->
+        <h2 id="yazdirma" class="page-break">5. Yazdirma ve Dosya Indirme</h2>
+
+        <h3>5.1 Yazici Ajan Durumu</h3>
+
+        <p>RDP oturumu acildiginda, tarayici penceresinin <strong>sol alt kosesinde</strong>
+        bir yazici simgesi goreceksiniz. Bu simge, yazici ajaninin durumunu gosterir:</p>
+
+        <div class="status-demo">
+            <div class="status-item">
+                <div class="status-icon connected">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 6 2 18 2 18 9"/>
+                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+                        <rect x="6" y="14" width="12" height="8"/>
+                    </svg>
+                </div>
+                <div class="status-label" style="color:#27ae60;">Bagli (Yesil)</div>
+                <p style="font-size:12px; color:#888; margin-top:4px;">Ajan calisiyor, yazdirma hazir</p>
+            </div>
+            <div class="status-item">
+                <div class="status-icon disconnected">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 6 2 18 2 18 9"/>
+                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+                        <rect x="6" y="14" width="12" height="8"/>
+                    </svg>
+                </div>
+                <div class="status-label" style="color:#888;">Bagli Degil (Gri)</div>
+                <p style="font-size:12px; color:#888; margin-top:4px;">Ajan calismiyior veya baglanti yok</p>
+            </div>
+        </div>
+
+        <p>Asagidaki ekran goruntusunde sol alt kosedeki <strong>yesil yazici ikonu</strong> gorulebilir:</p>
+        <div class="screenshot-wrapper">
+            <img class="screenshot" src="screenshots/03-anasayfa.png" alt="Yazici ikonu - sol alt kose">
+            <p class="screenshot-caption">Sol alt kosedeki yesil yazici ikonu - ajan bagli ve hazir</p>
+        </div>
+
+        <div class="warning-box">
+            <strong>Simge gri ise:</strong>
+            Yazici ajan bilgisayarinizda calismiyior olabilir. "Sorun Giderme" bolumune bakin.
+        </div>
+
+        <h3>5.2 PDF Yazdirma</h3>
+
+        <p>RDP oturumundan bir PDF dosyasi indirdiginizde veya yazdir komutunu kullandiginizda:</p>
+
+        <div class="flow-steps">
+            <div class="flow-step">
+                <div class="flow-dot">1</div>
+                <div>Uzak masaustunde dosyayi indirin veya yazdir komutunu kullanin</div>
+            </div>
+            <div class="flow-arrow">&#8595;</div>
+            <div class="flow-step">
+                <div class="flow-dot">2</div>
+                <div>Sistem dosyayi otomatik olarak yakalar ve yerel ajana gonderir</div>
+            </div>
+            <div class="flow-arrow">&#8595;</div>
+            <div class="flow-step">
+                <div class="flow-dot">3</div>
+                <div><strong>Windows Yazici Secim Ekrani</strong> acilir - yazici ve ayarlari secin</div>
+            </div>
+            <div class="flow-arrow">&#8595;</div>
+            <div class="flow-step">
+                <div class="flow-dot">4</div>
+                <div>PDF yerel yazicinizdan cikti olarak yazdirilir</div>
+            </div>
+        </div>
+
+        <div class="info-box">
+            <strong>Ipucu:</strong>
+            Yazici secim ekrani acildiginda tum yerel yazicilarinizi goreceksiniz.
+            Sayfa boyutu, renk ve kopya sayisi gibi ayarlari degistirebilirsiniz.
+        </div>
+
+        <h3>5.3 Diger Dosyalari Indirme</h3>
+
+        <p>PDF olmayan dosyalar (Excel, Word, resim vb.) icin:</p>
+
+        <div class="flow-steps">
+            <div class="flow-step">
+                <div class="flow-dot">1</div>
+                <div>Uzak masaustunde dosyayi indirin</div>
+            </div>
+            <div class="flow-arrow">&#8595;</div>
+            <div class="flow-step">
+                <div class="flow-dot">2</div>
+                <div>Sistem dosyayi otomatik olarak yakalar</div>
+            </div>
+            <div class="flow-arrow">&#8595;</div>
+            <div class="flow-step">
+                <div class="flow-dot">3</div>
+                <div><strong>"Farkli Kaydet"</strong> penceresi acilir - kaydetmek istediginiz konumu secin</div>
+            </div>
+            <div class="flow-arrow">&#8595;</div>
+            <div class="flow-step">
+                <div class="flow-dot">4</div>
+                <div>Dosya sectiginiz konuma kaydedilir</div>
+            </div>
+        </div>
+
+        <div class="screenshot-wrapper">
+            <img class="screenshot" src="screenshots/06-farkli-kaydet.png" alt="Farkli Kaydet penceresi">
+            <p class="screenshot-caption">Excel dosyasi icin "Farkli Kaydet" penceresi - Masaustu veya istediginiz klasoru secin</p>
+        </div>
+
+        <div class="screenshot-wrapper">
+            <img class="screenshot" src="screenshots/07-yazdir-menu.png" alt="Dosya islem menusu">
+            <p class="screenshot-caption">Dosya islem secenekleri</p>
+        </div>
+
+        <h3>5.4 Desteklenen Dosya Turleri</h3>
+
+        <table>
+            <tr>
+                <th>Dosya Turu</th>
+                <th>Uzantilar</th>
+                <th>Varsayilan Islem</th>
+            </tr>
+            <tr>
+                <td>PDF</td>
+                <td><code>.pdf</code></td>
+                <td>Yazici secim ekrani acilir</td>
+            </tr>
+            <tr>
+                <td>Excel</td>
+                <td><code>.xlsx</code>, <code>.xls</code></td>
+                <td>Farkli Kaydet penceresi acilir</td>
+            </tr>
+            <tr>
+                <td>Word</td>
+                <td><code>.docx</code>, <code>.doc</code></td>
+                <td>Farkli Kaydet penceresi acilir</td>
+            </tr>
+            <tr>
+                <td>Resim</td>
+                <td><code>.jpg</code>, <code>.png</code></td>
+                <td>Yazdir veya kaydet secimi</td>
+            </tr>
+            <tr>
+                <td>Metin</td>
+                <td><code>.txt</code></td>
+                <td>Farkli Kaydet penceresi acilir</td>
+            </tr>
+            <tr>
+                <td>Arsiv</td>
+                <td><code>.zip</code>, <code>.rar</code></td>
+                <td>Farkli Kaydet penceresi acilir</td>
+            </tr>
+        </table>
+
+        <div class="info-box">
+            <strong>Maksimum dosya boyutu:</strong> 50 MB
+        </div>
+
+        <!-- ===== 6. DOGRULAMA ===== -->
+        <h2 id="dogrulama" class="page-break">6. Kurulum Dogrulama</h2>
+
+        <p>Kurulumun basarili oldugundan emin olmak icin asagidaki kontrolleri yapin:</p>
+
+        <h3>6.1 Saglik Kontrolu (Health Check)</h3>
+
+        <div class="step-card">
+            <span class="step-number">1</span>
+            <span class="step-title">Tarayicida saglik kontrolu yapin</span>
+            <div class="step-content">
+                <p>Web tarayicinizda asagidaki adresi acin:</p>
+                <pre><code>http://localhost:8181/health</code></pre>
+                <p>Eger ajan calisiyor ise bir yanit goreceksiniz. Sayfa acilmiyorsa
+                ajan calismiyior demektir.</p>
+            </div>
+        </div>
+
+        <h3>6.2 Gorev Yoneticisinden Kontrol</h3>
+
+        <div class="step-card">
+            <span class="step-number">2</span>
+            <span class="step-title">Gorev Yoneticisini acin</span>
+            <div class="step-content">
+                <p><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Esc</kbd> tuslariyla Gorev Yoneticisini acin.</p>
+                <p><strong>"Ayrintilar"</strong> sekmesinde <code>GuacamolePrintAgent.exe</code> islemini arayin.</p>
+                <div class="success-box">
+                    <strong>Islem listede gorunuyorsa:</strong> Ajan dogru bir sekilde calisiyor.
+                </div>
+            </div>
+        </div>
+
+        <h3>6.3 Tarayici Konsolundan Kontrol</h3>
+
+        <div class="step-card">
+            <span class="step-number">3</span>
+            <span class="step-title">Tarayici konsolunu kontrol edin</span>
+            <div class="step-content">
+                <p>Guacamole sayfasinda <kbd>F12</kbd> tusuna basin, <strong>"Console"</strong>
+                sekmesine gecin. Asagidaki mesajlari gormelisiniz:</p>
+                <pre><code>PRINT INTERCEPTION v9.0
+Print agent CONNECTED</code></pre>
+            </div>
+        </div>
+
+        <!-- ===== 7. SORUN GIDERME ===== -->
+        <h2 id="sorun-giderme" class="page-break">7. Sorun Giderme</h2>
+
+        <h3>7.1 Yazici ikonu gri (baglanti yok)</h3>
+
+        <div class="step-card">
+            <span class="step-number">?</span>
+            <span class="step-title">Ajan calismiyior olabilir</span>
+            <div class="step-content">
+                <p><strong>Cozum:</strong></p>
+                <ol>
+                    <li>Gorev Yoneticisinde <code>GuacamolePrintAgent.exe</code> islemini kontrol edin</li>
+                    <li>Islem yoksa, Baslat menusu arama cubuguna <code>StartHidden</code> yazip calistirin:
+                        <pre><code>C:\Program Files\GuacamolePrintAgent\StartHidden.vbs</code></pre>
+                    </li>
+                    <li>Hala calismiyorsa, MSI dosyasini tekrar calistirarak <strong>"Onar"</strong> secenegini kullanin</li>
+                </ol>
+            </div>
+        </div>
+
+        <h3>7.2 Yazdir komutu calismiyior</h3>
+
+        <div class="step-card">
+            <span class="step-number">?</span>
+            <span class="step-title">Dosya iletilmiyior</span>
+            <div class="step-content">
+                <p><strong>Kontrol Edin:</strong></p>
+                <ol>
+                    <li>Sol alt kosedeki yazici ikonu <strong>yesil</strong> mi?</li>
+                    <li>Tarayicida <kbd>F12</kbd> &rarr; Console sekmesinde hata var mi?</li>
+                    <li>Sayfayi <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd> ile yenileyin</li>
+                </ol>
+            </div>
+        </div>
+
+        <h3>7.3 Yazici secim ekrani gelmiyor</h3>
+
+        <div class="step-card">
+            <span class="step-number">?</span>
+            <span class="step-title">Dialog penceresi arka planda kalmis olabilir</span>
+            <div class="step-content">
+                <p><strong>Cozum:</strong></p>
+                <ol>
+                    <li>Gorev cubugunda <code>GuacamolePrintAgent</code> simgesine tiklayin</li>
+                    <li><kbd>Alt</kbd> + <kbd>Tab</kbd> ile pencereler arasi gecis yapin</li>
+                    <li>Hala gelmiyorsa, ajani yeniden baslatin: Gorev Yoneticisinde islemi sonlandirin,
+                        ardindan <code>StartHidden.vbs</code> calistirin</li>
+                </ol>
+            </div>
+        </div>
+
+        <h3>7.4 "Baglanti reddedildi" hatasi</h3>
+
+        <div class="step-card">
+            <span class="step-number">?</span>
+            <span class="step-title">Guvenlik duvari port 8181'i engelliyor olabilir</span>
+            <div class="step-content">
+                <p><strong>Cozum:</strong></p>
+                <ol>
+                    <li><strong>Windows Guvenlik Duvari</strong> &rarr; <strong>Gelen Kurallar</strong> icinde
+                    "Guacamole Print Agent" kuralini kontrol edin</li>
+                    <li>Kural yoksa, komut satirindan ekleyin:
+                        <pre><code>netsh advfirewall firewall add rule name="Guacamole Print Agent" dir=in action=allow protocol=TCP localport=8181</code></pre>
+                    </li>
+                </ol>
+            </div>
+        </div>
+
+        <h3>7.5 Windows Defender programi engelliyor</h3>
+
+        <div class="step-card">
+            <span class="step-number">?</span>
+            <span class="step-title">Defender istisnasi eklenmemis olabilir</span>
+            <div class="step-content">
+                <p><strong>Cozum:</strong> Asagidaki dosyayi yonetici olarak calistirin:</p>
+                <pre><code>"C:\Program Files\GuacamolePrintAgent\DefenderSetup.bat"</code></pre>
+            </div>
+        </div>
+
+        <!-- ===== 8. KALDIRMA ===== -->
+        <h2 id="kaldirma" class="page-break">8. Programi Kaldirma</h2>
+
+        <h3>8.1 Windows Ayarlarindan Kaldirma</h3>
+
+        <div class="step-card">
+            <span class="step-number">1</span>
+            <span class="step-title">Ayarlar &rarr; Uygulamalar &rarr; Yuklu Uygulamalar</span>
+            <div class="step-content">
+                <ol>
+                    <li><kbd>Win</kbd> + <kbd>I</kbd> tuslariyla <strong>Ayarlar</strong>'i acin</li>
+                    <li><strong>Uygulamalar</strong> &rarr; <strong>Yuklu uygulamalar</strong> bolumune gidin</li>
+                    <li><strong>"Guacamole Print Agent"</strong> uygulamasini bulun</li>
+                    <li>Uc nokta menusune tiklayip <strong>"Kaldir"</strong> secin</li>
+                    <li>Yonetici iznini onaylayin</li>
+                </ol>
+            </div>
+        </div>
+
+        <h3>8.2 Komut Satirindan Kaldirma</h3>
+        <pre><code>msiexec /x GuacamolePrintAgent.msi /qn</code></pre>
+
+        <div class="info-box">
+            <strong>Kaldirma Islemleri:</strong>
+            Program dosyalari, guvenlik duvari kurali, Windows Defender istisnasi ve
+            otomatik baslatma kaydi otomatik olarak temizlenir.
+        </div>
+
+        <!-- ===== FOOTER ===== -->
+        <div class="footer">
+            <p>Guacamole Yazici Ajan - Kullanici Kilavuzu v2.2.0 | Subat 2026</p>
+            <p>Sorun veya sorulariniz icin IT biriminizle iletisime gecin.</p>
+        </div>
+
+    </div>
+</body>
+</html>

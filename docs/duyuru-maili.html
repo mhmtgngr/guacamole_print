@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yeni Uzak Masaustu Sistemi Duyurusu</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.7;
+            color: #333;
+            background: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+        }
+        .email-container {
+            max-width: 700px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        }
+        .email-header {
+            background: linear-gradient(135deg, #1a5276, #2980b9);
+            color: white;
+            padding: 30px 40px;
+        }
+        .email-header h1 {
+            margin: 0 0 6px;
+            font-size: 22px;
+            font-weight: 600;
+        }
+        .email-header p {
+            margin: 0;
+            font-size: 14px;
+            opacity: 0.85;
+        }
+        .email-body {
+            padding: 32px 40px;
+            font-size: 14px;
+        }
+        .email-body p {
+            margin: 0 0 14px;
+        }
+        .greeting {
+            font-size: 15px;
+            margin-bottom: 20px;
+        }
+        h2 {
+            font-size: 17px;
+            color: #1a5276;
+            margin: 28px 0 14px;
+            padding-bottom: 6px;
+            border-bottom: 2px solid #eef2f7;
+        }
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 13px;
+        }
+        .comparison-table th {
+            background: #f0f4f8;
+            padding: 10px 14px;
+            text-align: left;
+            font-weight: 600;
+            color: #2c3e50;
+            border: 1px solid #e0e5ea;
+        }
+        .comparison-table td {
+            padding: 10px 14px;
+            border: 1px solid #e0e5ea;
+            vertical-align: top;
+        }
+        .comparison-table .old {
+            color: #922b21;
+            background: #fdf2f2;
+        }
+        .comparison-table .new {
+            color: #1e8449;
+            background: #f0faf4;
+        }
+        .advantage-list {
+            list-style: none;
+            padding: 0;
+            margin: 16px 0;
+        }
+        .advantage-list li {
+            padding: 10px 14px 10px 40px;
+            margin: 8px 0;
+            background: #f8fbfe;
+            border-left: 3px solid #2980b9;
+            border-radius: 4px;
+            position: relative;
+            font-size: 13px;
+        }
+        .advantage-list li::before {
+            content: "✓";
+            position: absolute;
+            left: 14px;
+            color: #27ae60;
+            font-weight: bold;
+            font-size: 15px;
+        }
+        .advantage-list li strong {
+            color: #1a5276;
+        }
+        .highlight-box {
+            background: #eaf4fd;
+            border: 1px solid #bdd7ee;
+            border-radius: 6px;
+            padding: 16px 20px;
+            margin: 18px 0;
+            font-size: 13px;
+        }
+        .highlight-box strong {
+            color: #1a5276;
+            display: block;
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+        .steps {
+            counter-reset: step;
+            list-style: none;
+            padding: 0;
+        }
+        .steps li {
+            counter-increment: step;
+            padding: 8px 0 8px 36px;
+            position: relative;
+            font-size: 13px;
+        }
+        .steps li::before {
+            content: counter(step);
+            position: absolute;
+            left: 0;
+            width: 24px;
+            height: 24px;
+            line-height: 24px;
+            text-align: center;
+            background: #2980b9;
+            color: white;
+            border-radius: 50%;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .email-footer {
+            background: #f8f9fa;
+            padding: 20px 40px;
+            font-size: 12px;
+            color: #888;
+            border-top: 1px solid #eee;
+        }
+        .signature {
+            margin-top: 24px;
+            padding-top: 16px;
+            border-top: 1px solid #eee;
+            font-size: 13px;
+        }
+        .tag {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .tag-new { background: #e8f8f0; color: #1e8449; }
+        .tag-old { background: #fce8e8; color: #922b21; }
+        code {
+            background: #f0f3f6;
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-family: Consolas, monospace;
+            font-size: 12px;
+            color: #c0392b;
+        }
+        @media print {
+            body { background: white; padding: 0; }
+            .email-container { box-shadow: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+
+        <!-- HEADER -->
+        <div class="email-header">
+            <h1>Yeni Uzak Masaustu Erisim Sistemi</h1>
+            <p>Microsoft RD Web Access yerine Apache Guacamole'a gecis</p>
+        </div>
+
+        <!-- BODY -->
+        <div class="email-body">
+
+            <p class="greeting">Degerli Calisma Arkadaslarim,</p>
+
+            <p>
+                Bildiginiz uzere, uzak masaustu erisimi icin uzun suredir <strong>Microsoft Remote Desktop
+                Services (RD Web Access)</strong> kullanilmaktaydi. Yaptigimiz degerlendirmeler ve
+                ihtiyac analizleri sonucunda, daha modern, guvenli ve kullanici dostu bir cozum olan
+                <strong>Apache Guacamole</strong> tabanli yeni sisteme gecis yapilmistir.
+            </p>
+
+            <p>
+                Yeni sisteme asagidaki adresten erisebilirsiniz:
+            </p>
+            <div class="highlight-box">
+                <strong>Yeni Erisim Adresi</strong>
+                <code>https://rguac.tdv.org:9443/guacamole/</code><br><br>
+                Kurumsal ADFS hesabiniz ile giris yapabilirsiniz. Ek bir kullanici adi veya sifre tanimlamaya gerek yoktur.
+            </div>
+
+            <!-- KARSILASTIRMA -->
+            <h2>Eski Sistem ve Yeni Sistem Karsilastirmasi</h2>
+
+            <table class="comparison-table">
+                <tr>
+                    <th style="width:180px;">Ozellik</th>
+                    <th><span class="tag tag-old">Eski</span> Microsoft RD Web Access</th>
+                    <th><span class="tag tag-new">Yeni</span> Apache Guacamole</th>
+                </tr>
+                <tr>
+                    <td><strong>Erisim Yontemi</strong></td>
+                    <td class="old">ActiveX veya RDP istemcisi gerekli; bazi tarayicilarda calismaz</td>
+                    <td class="new">Sadece web tarayici yeterli; ek yazilim gerekmez</td>
+                </tr>
+                <tr>
+                    <td><strong>Tarayici Destegi</strong></td>
+                    <td class="old">Sadece Internet Explorer / Edge (eski); Chrome ve Firefox'ta sorunlu</td>
+                    <td class="new">Chrome, Edge, Firefox, Safari - tum modern tarayicilar</td>
+                </tr>
+                <tr>
+                    <td><strong>Isletim Sistemi</strong></td>
+                    <td class="old">Sadece Windows</td>
+                    <td class="new">Windows, macOS, Linux, tablet, telefon</td>
+                </tr>
+                <tr>
+                    <td><strong>Kimlik Dogrulama</strong></td>
+                    <td class="old">Ayri kullanici adi / sifre; ek domain girisi</td>
+                    <td class="new">ADFS ile tek oturum acma (SSO) - kurumsal hesabiniz yeterli</td>
+                </tr>
+                <tr>
+                    <td><strong>Yazdirma</strong></td>
+                    <td class="old">RDP yazici yonlendirme; yavas, surekci sorunlu, baglanti kopunca calismazdi</td>
+                    <td class="new">Akilli yazici ajan ile aninda yerel yazdirma; yazici secim ekrani acilir</td>
+                </tr>
+                <tr>
+                    <td><strong>Dosya Transferi</strong></td>
+                    <td class="old">Pano (clipboard) ile sinirli; buyuk dosyalarda sorun</td>
+                    <td class="new">Otomatik dosya indirme; "Farkli Kaydet" penceresi ile kolay kayit</td>
+                </tr>
+                <tr>
+                    <td><strong>Baglanti Hizi</strong></td>
+                    <td class="old">RDP protokolu; yuksek bant genisligi gerektirir</td>
+                    <td class="new">HTML5 tabanli; dusuk bant genisliginde bile akici calisir</td>
+                </tr>
+                <tr>
+                    <td><strong>Kurulum</strong></td>
+                    <td class="old">RDP istemci ayarlari, sertifika yukleme, yerel grup ilkeleri</td>
+                    <td class="new">Tarayicida adres acmak yeterli; bir kerelik yazici ajan kurulumu (opsiyonel)</td>
+                </tr>
+                <tr>
+                    <td><strong>Guvenlik</strong></td>
+                    <td class="old">Dogrudan RDP portu acik; dis agdan saldiriya acik</td>
+                    <td class="new">HTTPS uzerinden tunelleme; RDP portu dis aga kapali</td>
+                </tr>
+                <tr>
+                    <td><strong>Coklu Oturum</strong></td>
+                    <td class="old">Her oturum icin ayri pencere; yonetim zor</td>
+                    <td class="new">Tek tarayici sekmesinden tum baglantilara erisim</td>
+                </tr>
+            </table>
+
+            <!-- AVANTAJLAR -->
+            <h2>Yeni Sistemin Avantajlari</h2>
+
+            <ul class="advantage-list">
+                <li><strong>Sifir Kurulum:</strong> Tarayicinizi acin, adrese gidin, calismaya baslayin.
+                RDP istemcisi, ActiveX eklentisi veya ozel yapilandirma gerekmez.</li>
+
+                <li><strong>Her Yerden Erisim:</strong> Ofis, ev, mobil cihaz - internet olan her yerden
+                ayni deneyimle calisin. Isletim sistemi farketmez.</li>
+
+                <li><strong>Kurumsal Tek Oturum Acma (SSO):</strong> ADFS entegrasyonu sayesinde
+                kurumsal hesabinizla otomatik giris. Ayri sifre hatirlamaya gerek yok.</li>
+
+                <li><strong>Akilli Yazdirma:</strong> Uzak masaustunden yazdir komutunu verdiginizde,
+                yerel bilgisayarinizdaki yazici secim ekrani otomatik acilir. Istediginiz yaziciyi
+                secip dogrudan cikti alabilirsiniz.</li>
+
+                <li><strong>Kolay Dosya Indirme:</strong> Uzak masaustunden indirdiginiz dosyalar
+                (Excel, Word, PDF vb.) otomatik olarak yerel bilgisayariniza aktarilir.
+                "Farkli Kaydet" penceresiyle istediginiz konuma kaydedebilirsiniz.</li>
+
+                <li><strong>Gelismis Guvenlik:</strong> RDP portlari dis aga kapali. Tum iletisim
+                HTTPS sifreleme ile korunur. Oturum kayitlari merkezi olarak tutulur.</li>
+
+                <li><strong>Yuksek Performans:</strong> HTML5 tabanli goruntu aktarimi sayesinde
+                dusuk bant genisliginde bile akici calisir. Gecikmeli baglantilarda bile
+                konforsuz kullanim deneyimi saglar.</li>
+
+                <li><strong>Merkezi Yonetim:</strong> IT ekibi tum baglantilari, kullanici yetkilerini
+                ve oturumlari tek bir panelden yonetir. Sorun tespiti ve cozumu hizlanir.</li>
+            </ul>
+
+            <!-- YAZICI AJAN -->
+            <h2>Yazici Ajan Kurulumu (Opsiyonel)</h2>
+
+            <p>Uzak masaustunden <strong>yazdirma ve dosya indirme</strong> ozelliklerini kullanmak
+            istiyorsaniz, bilgisayariniza bir kerelik <strong>Guacamole Yazici Ajan</strong>
+            kurulumu yapmaniz gerekmektedir.</p>
+
+            <ol class="steps">
+                <li>IT biriminizden <strong>GuacamolePrintAgent.msi</strong> dosyasini edinin</li>
+                <li>Dosyaya cift tiklayarak kurulumu baslatin</li>
+                <li>Yonetici iznini onaylayin - kurulum otomatik tamamlanir</li>
+                <li>Program arka planda calisir, her Windows girisinde otomatik baslar</li>
+            </ol>
+
+            <div class="highlight-box">
+                <strong>Kurulum Sonrasi</strong>
+                Guacamole sayfasinda sol alt kosede <strong style="color:#27ae60;">yesil yazici ikonu</strong>
+                goruyorsaniz her sey hazir demektir. Ek bir ayar yapmaniza gerek yoktur.
+            </div>
+
+            <!-- KULLANIM -->
+            <h2>Nasil Kullanirim?</h2>
+
+            <ol class="steps">
+                <li>Tarayicinizda <code>https://rguac.tdv.org:9443/guacamole/</code> adresini acin</li>
+                <li>ADFS ile kurumsal hesabinizla giris yapin</li>
+                <li>Anasayfada size tanimli baglantilari goreceksiniz</li>
+                <li>Istediginiz baglantiya tiklayarak uzak masaustune baglanin</li>
+                <li>Calismanizi yapin - yazdirma ve dosya indirme otomatik calisir</li>
+            </ol>
+
+            <p>
+                Detayli kullanim kilavuzuna ekte ulasabilirsiniz. Sorulariniz veya
+                yasadiginiz sorunlar icin IT birimimizle iletisime gecebilirsiniz.
+            </p>
+
+            <p>
+                Yeni sisteme gecis surecinde gostereceginiz anlayis ve isbirligine
+                simdiden tesekkur ederiz.
+            </p>
+
+            <!-- IMZA -->
+            <div class="signature">
+                <p>Saygilarimizla,</p>
+                <p><strong>Bilgi Teknolojileri Birimi</strong></p>
+            </div>
+
+        </div>
+
+        <!-- FOOTER -->
+        <div class="email-footer">
+            <p>Bu e-posta Guacamole Uzak Masaustu Erisim Sistemi gecisi hakkinda bilgilendirme amaclidir.</p>
+            <p>Ek: Kullanici Kilavuzu (kullanici-kilavuzu.html)</p>
+        </div>
+
+    </div>
+</body>
+</html>
