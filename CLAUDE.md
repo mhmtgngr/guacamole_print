@@ -62,13 +62,13 @@ Local Print Agent (C# .NET 8, runs hidden in background)
 | `remote-server-scripts/Install-UserFileWatcher.ps1` | Installer: creates scheduled task (logon + RDP reconnect triggers) |
 | `remote-server-scripts/Uninstall-FileWatcher.ps1` | Uninstaller: removes task, stops watchers, deletes install folder |
 
-## Current State (2026-01-30, branch: dev)
+## Current State (2026-02-26, branch: dev)
 
 ### What Works (CONFIRMED)
 - Docker stack runs (PostgreSQL, guacd with drive volume, Guacamole web on port 8080)
 - guacd init container sets `/drive` permissions (UID 1000) on every startup
 - Guacamole drive redirection: `\\tsclient\GuacamoleDrive` accessible in RDP sessions
-- C# print agent installs via single MSI file (v2.2.0.0) and runs hidden in background
+- C# print agent installs via single MSI file (v2.9.0.0) and runs hidden in background
 - Agent auto-starts on Windows login for **all users** (HKLM registry + StartHidden.vbs)
 - Windows Firewall rule added automatically (port 8181, localhost only)
 - Windows Defender exclusion added automatically
@@ -77,8 +77,10 @@ Local Print Agent (C# .NET 8, runs hidden in background)
 - `aggressive-intercept.js` v9.0 loaded inside WAR (no 404)
 - `Guacamole.Client.onfile` patched, stream.index >= 0 captures blob data directly
 - **Print data flows end-to-end**: JS captures bytes → sends via WS → C# receives → decodes → renders PDF
-- **Native Windows PrintDialog appears** with printer selection
+- **Print sizing dialog** before printing: scale options (Sayfaya Sığdır / Gerçek Boyut / Özel 25-400%) + adjustable margins (mm) + live A4 preview
+- **Native Windows PrintDialog appears** after sizing dialog with printer selection
 - PDF rendered at 300 DPI on-demand (pages rendered during print, not upfront)
+- Scale > 100% enlarges content (overflows page, cropped naturally)
 - **Non-PDF files show Windows Save As dialog** (user picks save location)
 - Heartbeat ping/pong keeps connection alive
 - **Duplicate sends prevented**: filename+size dedup (10s window) + blob WeakSet + capturedFiles map
@@ -89,7 +91,7 @@ Local Print Agent (C# .NET 8, runs hidden in background)
 ### MSI Installer
 
 Single file: `local-print-agent/installer/GuacamolePrintAgent.msi` (~65 MB)
-Version: **2.2.0.0** (WiX v4, UpgradeCode: `B748B3C5-C676-4B01-83F6-6D8DEE89DFE4`)
+Version: **2.9.0.0** (WiX v4, UpgradeCode: `B748B3C5-C676-4B01-83F6-6D8DEE89DFE4`)
 
 **What it does on install:**
 1. Installs files to `C:\Program Files\GuacamolePrintAgent\` (8 files)
@@ -192,6 +194,11 @@ The `docker-compose.yml` includes:
 | MSI uninstall leaves files behind | No custom action to stop agent before file removal; EXE locked | Added `StopAgent` deferred CA with `taskkill /F` before RemoveFiles |
 | MSI doesn't add Defender exclusions | MSI deferred CAs (SYSTEM) can't run `Add-MpPreference` | VBScript with `ShellExecute "runas"` for proper UAC elevation |
 | MSI doesn't remove Defender on uninstall | No uninstall CA for Defender | Added `RemoveDefenderExclusions` CA via `DefenderRemove.vbs` |
+| PDF prints too small on A4 | No scaling options, default margins too large | Added sizing dialog with fit/actual/custom scale + adjustable margins |
+| MSI not replacing EXE on upgrade | `AssemblyFileVersion` stuck at 1.0.0.0 while WXS bumped | Synced `AssemblyFileVersion` in csproj with WXS package version |
+| Turkish chars clipped in dialog | Fixed-size labels too short for diacritics (Ö, ş, ğ) | Changed to `AutoSize = true` on all labels |
+| Dialog appears behind browser | `TopMost` + `BringToFront` not enough from background | Restored `ForceForeground` (Alt-key trick) in Shown event |
+| Scale > 100% had no effect | Content clamped back to fit within margins | Removed clamping; overflow clipped to paper bounds |
 
 ## How Things Are Built & Deployed
 
@@ -259,12 +266,18 @@ Three layers + dedup + heartbeat:
 2. Decode Base64 → `byte[] fileBytes`
 3. Save to `%TEMP%\GuacamolePrint\{filename}`
 4. `Conversion.GetPageCount(fileBytes)` - get page count
-5. Create invisible `TopMost` owner form
-6. `ForceForeground(ownerForm.Handle)` - Alt-key trick to steal focus
-7. Show `PrintDialog(ownerForm)` - native Windows dialog with printer selection
-8. On OK: `PrintDocument.Print()` renders each page on-demand at 300 DPI
-9. `Conversion.ToImage(fileBytes, pageIndex, null, RenderOptions(Dpi:300))` per page
-10. Scale image to fit `e.MarginBounds`, centered
+5. Render first page at 96 DPI for preview image
+6. Show **sizing dialog** (Turkish UI) with:
+   - Scale options: Sayfaya Sığdır (fit) / Gerçek Boyut (actual 100%) / Özel % (25-400%)
+   - Adjustable margins: Üst/Alt/Sol/Sağ in mm (default 6mm)
+   - Live A4 preview panel with dashed margin lines, updates on any change
+   - Content overflow clipped to paper bounds for scale > 100%
+7. `ForceForeground(mainForm.Handle)` - Alt-key trick to steal focus from browser
+8. On Yazdır: read scale mode + margin values (mm → hundredths of inch)
+9. Show `PrintDialog(ownerForm)` - native Windows dialog with printer selection
+10. On OK: `PrintDocument.Print()` renders each page on-demand at 300 DPI
+11. `Conversion.ToImage(fileBytes, pageIndex, null, RenderOptions(Dpi:300))` per page
+12. Scale/position image according to user's chosen scale mode, centered within margins
 
 ### Non-PDF File Flow
 1. Same decode + save as PDF
@@ -321,7 +334,7 @@ docker stop guacamole-client guacamole-nginx guacamole-server guacamole-db
 | JS Interception | ES5 (for browser compat) |
 | Local Agent | C# .NET 8.0 (net8.0-windows), self-contained publish |
 | PDF Rendering | PDFtoImage 4.1.1 (Pdfium native) + SkiaSharp |
-| Print Dialog | System.Drawing.Printing.PrintDialog (native Windows) |
+| Print Dialog | Custom WinForms sizing dialog (Turkish UI) + System.Drawing.Printing.PrintDialog |
 | Agent Server | ASP.NET Core WebSocket (port 8181) |
 | Foreground Hack | Win32 P/Invoke (AttachThreadInput, keybd_event, SetForegroundWindow) |
 | Installer | WiX Toolset 6.0 (MSI) + batch scripts |
