@@ -288,39 +288,213 @@ public class SimplePrintAgent
                     int pageCount = Conversion.GetPageCount(fileBytes);
                     Console.WriteLine($"📄 PDF has {pageCount} page(s)");
 
-                    // Set up PrintDocument - render pages on demand during printing
+                    // Render first page for preview
+                    Console.WriteLine("📐 Rendering preview...");
+                    var prevOpts = new RenderOptions(Dpi: 96);
+                    using var prevBmp = Conversion.ToImage(fileBytes, 0, null, prevOpts);
+                    using var prevData = prevBmp.Encode(SKEncodedImageFormat.Png, 85);
+                    var prevMs = new MemoryStream(prevData.ToArray());
+                    var prevImg = Image.FromStream(prevMs);
+                    Console.WriteLine($"📐 Preview rendered: {prevImg.Width}x{prevImg.Height}");
+
+                    // Scale state
+                    string scaleMode = "fit";
+                    int customPct = 100;
+
+                    // --- Main dialog: sizing + preview ---
+                    int leftW = 300, prevW = 440, formH = 560;
+                    using var mainForm = new Form
+                    {
+                        Text = $"Yazd\u0131rma - {fileName}",
+                        ClientSize = new Size(leftW + prevW + 20, formH),
+                        StartPosition = FormStartPosition.CenterScreen,
+                        FormBorderStyle = FormBorderStyle.FixedDialog,
+                        MaximizeBox = false,
+                        MinimizeBox = false,
+                        TopMost = true,
+                        ShowInTaskbar = true
+                    };
+
+                    // === Left panel: scale + info + margins ===
+                    var lblScale = new Label { Text = "\u00d6l\u00e7eklendirme:", Location = new Point(20, 15), AutoSize = true, Font = new Font("Segoe UI", 12, FontStyle.Bold) };
+                    var rbFit = new RadioButton { Text = "Sayfaya S\u0131\u011fd\u0131r", Location = new Point(30, 50), Size = new Size(250, 30), Checked = true, Font = new Font("Segoe UI", 10) };
+                    var rbActual = new RadioButton { Text = "Ger\u00e7ek Boyut (100%)", Location = new Point(30, 82), Size = new Size(250, 30), Font = new Font("Segoe UI", 10) };
+                    var rbCustom = new RadioButton { Text = "\u00d6zel:", Location = new Point(30, 114), Size = new Size(70, 30), Font = new Font("Segoe UI", 10) };
+                    var nudPct = new NumericUpDown { Location = new Point(105, 116), Size = new Size(75, 28), Minimum = 25, Maximum = 400, Value = 100, Increment = 10, Font = new Font("Segoe UI", 10) };
+                    var lblPct = new Label { Text = "%", Location = new Point(184, 120), AutoSize = true, Font = new Font("Segoe UI", 10) };
+
+                    // File info
+                    string szTxt = fileBytes.Length < 1048576 ? $"{fileBytes.Length / 1024.0:N0} KB" : $"{fileBytes.Length / 1048576.0:N1} MB";
+                    var lblInfo = new Label { Text = $"Dosya: {fileName}\nBoyut: {szTxt}  |  Sayfa: {pageCount}", Location = new Point(25, 160), Size = new Size(270, 40), Font = new Font("Segoe UI", 9) };
+
+                    // Margins section - wider, clearer
+                    var lblMargin = new Label { Text = "Kenar Bo\u015fluklar\u0131 (mm):", Location = new Point(20, 210), AutoSize = true, Font = new Font("Segoe UI", 12, FontStyle.Bold) };
+
+                    int mRow1 = 250, mRow2 = 288;
+                    int mCol1Lbl = 30, mCol1Nud = 80, mCol2Lbl = 160, mCol2Nud = 210;
+                    var fntM = new Font("Segoe UI", 10);
+                    var nudSz = new Size(70, 28);
+
+                    var lblTopM = new Label { Text = "\u00dcst:", Location = new Point(mCol1Lbl, mRow1 + 3), AutoSize = true, Font = fntM };
+                    var nudTopM = new NumericUpDown { Location = new Point(mCol1Nud, mRow1), Size = nudSz, Minimum = 0, Maximum = 50, Value = 6, Font = fntM };
+                    var lblBotM = new Label { Text = "Alt:", Location = new Point(mCol2Lbl, mRow1 + 3), AutoSize = true, Font = fntM };
+                    var nudBotM = new NumericUpDown { Location = new Point(mCol2Nud, mRow1), Size = nudSz, Minimum = 0, Maximum = 50, Value = 6, Font = fntM };
+
+                    var lblLeftM = new Label { Text = "Sol:", Location = new Point(mCol1Lbl, mRow2 + 3), AutoSize = true, Font = fntM };
+                    var nudLeftM = new NumericUpDown { Location = new Point(mCol1Nud, mRow2), Size = nudSz, Minimum = 0, Maximum = 50, Value = 6, Font = fntM };
+                    var lblRightM = new Label { Text = "Sa\u011f:", Location = new Point(mCol2Lbl, mRow2 + 3), AutoSize = true, Font = fntM };
+                    var nudRightM = new NumericUpDown { Location = new Point(mCol2Nud, mRow2), Size = nudSz, Minimum = 0, Maximum = 50, Value = 6, Font = fntM };
+
+                    // === Right panel: preview ===
+                    var lblPrev = new Label { Text = "\u00d6nizleme:", Location = new Point(leftW + 5, 15), AutoSize = true, Font = new Font("Segoe UI", 12, FontStyle.Bold) };
+                    var prevPanel = new Panel { Location = new Point(leftW + 5, 45), Size = new Size(prevW - 5, formH - 70), BorderStyle = BorderStyle.FixedSingle, BackColor = Color.FromArgb(230, 230, 230) };
+
+                    prevPanel.Paint += (s, ev) =>
+                    {
+                        var g = ev.Graphics;
+                        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
+                        g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+
+                        float a4R = 297f / 210f;
+                        int pad = 12;
+                        int aw = prevPanel.Width - 2 * pad, ah = prevPanel.Height - 2 * pad;
+                        int pw, ph;
+                        if (ah / (float)aw > a4R) { pw = aw; ph = (int)(aw * a4R); }
+                        else { ph = ah; pw = (int)(ah / a4R); }
+                        int px = (prevPanel.Width - pw) / 2, py = (prevPanel.Height - ph) / 2;
+
+                        g.FillRectangle(Brushes.DarkGray, px + 4, py + 4, pw, ph);
+                        g.FillRectangle(Brushes.White, px, py, pw, ph);
+                        g.DrawRectangle(Pens.Gray, px, py, pw, ph);
+
+                        if (prevImg == null) return;
+
+                        // Dynamic margins from controls (mm to paper pixels)
+                        float mxL = pw * (float)nudLeftM.Value / 210f;
+                        float mxR = pw * (float)nudRightM.Value / 210f;
+                        float myT = ph * (float)nudTopM.Value / 297f;
+                        float myB = ph * (float)nudBotM.Value / 297f;
+                        float cw = pw - mxL - mxR;
+                        float ch = ph - myT - myB;
+
+                        float iw, ih;
+                        if (rbFit.Checked)
+                        {
+                            float sc = Math.Min(cw / prevImg.Width, ch / prevImg.Height);
+                            iw = prevImg.Width * sc; ih = prevImg.Height * sc;
+                        }
+                        else
+                        {
+                            float nw = prevImg.Width / 96f / 8.27f;
+                            float nh = prevImg.Height / 96f / 11.69f;
+                            if (rbCustom.Checked) { float cs = (float)nudPct.Value / 100f; nw *= cs; nh *= cs; }
+                            iw = pw * nw; ih = ph * nh;
+                            // No clamping - allow overflow for scale > 100%
+                        }
+
+                        float ix = px + mxL + (cw - iw) / 2f, iy = py + myT + (ch - ih) / 2f;
+
+                        // Clip to paper bounds so overflow is cropped, then restore
+                        var gState = g.Save();
+                        g.IntersectClip(new RectangleF(px + 1, py + 1, pw - 2, ph - 2));
+                        g.DrawImage(prevImg, ix, iy, iw, ih);
+                        g.Restore(gState);
+
+                        // Draw margin lines (always visible)
+                        using var dp = new Pen(Color.FromArgb(80, Color.Blue)) { DashStyle = System.Drawing.Drawing2D.DashStyle.Dash };
+                        g.DrawRectangle(dp, px + mxL, py + myT, cw, ch);
+                    };
+
+                    // Update preview on change
+                    rbFit.CheckedChanged += (s, ev) => prevPanel.Refresh();
+                    rbActual.CheckedChanged += (s, ev) => prevPanel.Refresh();
+                    rbCustom.CheckedChanged += (s, ev) => prevPanel.Refresh();
+                    nudPct.Click += (s, ev) => rbCustom.Checked = true;
+                    nudPct.ValueChanged += (s, ev) => { rbCustom.Checked = true; prevPanel.Refresh(); };
+                    nudTopM.ValueChanged += (s, ev) => prevPanel.Refresh();
+                    nudBotM.ValueChanged += (s, ev) => prevPanel.Refresh();
+                    nudLeftM.ValueChanged += (s, ev) => prevPanel.Refresh();
+                    nudRightM.ValueChanged += (s, ev) => prevPanel.Refresh();
+
+                    // Buttons
+                    var btnPrint = new Button { Text = "Yazd\u0131r", Location = new Point(30, formH - 60), Size = new Size(120, 42), Font = new Font("Segoe UI", 11, FontStyle.Bold), BackColor = Color.FromArgb(0, 120, 215), ForeColor = Color.White, FlatStyle = FlatStyle.Flat };
+                    var btnCancel = new Button { Text = "\u0130ptal", Location = new Point(165, formH - 60), Size = new Size(110, 42), Font = new Font("Segoe UI", 11) };
+                    btnPrint.Click += (s, ev) => { mainForm.DialogResult = DialogResult.OK; };
+                    btnCancel.Click += (s, ev) => { mainForm.DialogResult = DialogResult.Cancel; };
+
+                    mainForm.Controls.AddRange(new Control[] { lblScale, rbFit, rbActual, rbCustom, nudPct, lblPct, lblInfo, lblMargin, lblTopM, nudTopM, lblBotM, nudBotM, lblLeftM, nudLeftM, lblRightM, nudRightM, lblPrev, prevPanel, btnPrint, btnCancel });
+                    mainForm.Shown += (s, ev) => { ForceForeground(mainForm.Handle); mainForm.TopMost = true; mainForm.BringToFront(); mainForm.Activate(); };
+                    mainForm.FormClosed += (s, ev) => { prevImg?.Dispose(); prevMs?.Dispose(); };
+
+                    Console.WriteLine("📐 Showing sizing dialog...");
+                    var sizeResult = mainForm.ShowDialog();
+                    Console.WriteLine($"📐 Result: {sizeResult}");
+
+                    if (sizeResult != DialogResult.OK)
+                    {
+                        actionResult = "cancelled";
+                        Console.WriteLine("❌ Cancelled");
+                        return;
+                    }
+
+                    if (rbFit.Checked) scaleMode = "fit";
+                    else if (rbActual.Checked) scaleMode = "actual";
+                    else { scaleMode = "custom"; customPct = (int)nudPct.Value; }
+
+                    // Read margin values (mm to hundredths of inch)
+                    int mL = (int)((double)nudLeftM.Value * 100.0 / 25.4);
+                    int mR = (int)((double)nudRightM.Value * 100.0 / 25.4);
+                    int mT = (int)((double)nudTopM.Value * 100.0 / 25.4);
+                    int mB = (int)((double)nudBotM.Value * 100.0 / 25.4);
+                    Console.WriteLine($"📐 Mode: {scaleMode} {(scaleMode == "custom" ? customPct + "%" : "")}, Margins: L={nudLeftM.Value}mm R={nudRightM.Value}mm T={nudTopM.Value}mm B={nudBotM.Value}mm");
+
+                    // Set up PrintDocument
                     int currentPage = 0;
                     var printDoc = new PrintDocument();
                     printDoc.DocumentName = fileName;
+                    printDoc.DefaultPageSettings.Margins = new Margins(mL, mR, mT, mB);
 
                     printDoc.PrintPage += (sender, e) =>
                     {
-                        // Render at print time with high DPI
-                        var opts = new RenderOptions(Dpi: 300);
+                        var bounds = e.MarginBounds;
+                        RenderOptions opts;
+                        if (scaleMode == "fit")
+                        {
+                            int tPx = (int)(e.PageSettings.PaperSize.Width / 100f * 300);
+                            opts = new RenderOptions(Dpi: 300, Width: tPx, WithAspectRatio: true);
+                        }
+                        else
+                            opts = new RenderOptions(Dpi: 300);
+
                         using var skBitmap = Conversion.ToImage(fileBytes, currentPage, null, opts);
                         using var skData = skBitmap.Encode(SKEncodedImageFormat.Png, 100);
                         using var ms = new MemoryStream(skData.ToArray());
                         using var img = Image.FromStream(ms);
 
-                        // Scale image to fit page margins
-                        var bounds = e.MarginBounds;
-                        float scale = Math.Min(
-                            (float)bounds.Width / img.Width,
-                            (float)bounds.Height / img.Height);
-                        int w = (int)(img.Width * scale);
-                        int h = (int)(img.Height * scale);
-                        int x = bounds.X + (bounds.Width - w) / 2;
-                        int y = bounds.Y + (bounds.Height - h) / 2;
+                        float w, h;
+                        if (scaleMode == "fit")
+                        {
+                            float s = Math.Min((float)bounds.Width / img.Width, (float)bounds.Height / img.Height);
+                            w = img.Width * s; h = img.Height * s;
+                        }
+                        else
+                        {
+                            w = img.Width / 3f; h = img.Height / 3f;
+                            if (scaleMode == "custom") { w *= customPct / 100f; h *= customPct / 100f; }
+                            // No clamping - allow overflow for scale > 100% (printer crops naturally)
+                        }
+
+                        float x = bounds.X + (bounds.Width - w) / 2f;
+                        float y = bounds.Y + (bounds.Height - h) / 2f;
                         e.Graphics!.DrawImage(img, x, y, w, h);
                         currentPage++;
                         e.HasMorePages = currentPage < pageCount;
                     };
 
-                    // Show Windows print dialog using a TopMost owner form
+                    // Show printer selection
                     using var ownerForm = new Form
                     {
-                        Width = 1,
-                        Height = 1,
+                        Width = 1, Height = 1,
                         StartPosition = FormStartPosition.CenterScreen,
                         ShowInTaskbar = false,
                         FormBorderStyle = FormBorderStyle.None,
@@ -339,12 +513,12 @@ public class SimplePrintAgent
                     {
                         printDoc.Print();
                         actionResult = "printing";
-                        Console.WriteLine("✅ PDF sent to printer");
+                        Console.WriteLine("✅ Sent to printer");
                     }
                     else
                     {
                         actionResult = "cancelled";
-                        Console.WriteLine("❌ Print cancelled by user");
+                        Console.WriteLine("❌ Print cancelled");
                     }
                     ownerForm.Close();
                   }
