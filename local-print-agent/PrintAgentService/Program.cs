@@ -304,12 +304,15 @@ public class SimplePrintAgent
                     catch { }
                     Console.WriteLine($"\U0001f4cf Receipt width: {receiptWidthMm}mm");
 
-                    // Render first page to get aspect ratio for dynamic height
+                    // Render first page to get dimensions
                     var infoOpts = new RenderOptions(Dpi: 72);
                     using var infoBmp = Conversion.ToImage(fileBytes, 0, null, infoOpts);
-                    float pdfAspect = (float)infoBmp.Height / infoBmp.Width;
+                    bool pdfIsLandscape = infoBmp.Width > infoBmp.Height;
+                    float pdfAspect = pdfIsLandscape
+                        ? (float)infoBmp.Width / infoBmp.Height   // landscape: use W/H so height maps to receipt width
+                        : (float)infoBmp.Height / infoBmp.Width;  // portrait: normal H/W
                     int receiptHeightMm = (int)(receiptWidthMm * pdfAspect);
-                    Console.WriteLine($"\U0001f4cf Receipt size: {receiptWidthMm}mm x {receiptHeightMm}mm (aspect {pdfAspect:F2})");
+                    Console.WriteLine($"\U0001f4cf Receipt size: {receiptWidthMm}mm x {receiptHeightMm}mm (pdfLandscape: {pdfIsLandscape}, aspect {pdfAspect:F2})");
 
                     // Paper size in hundredths of inch
                     int psW = (int)(receiptWidthMm / 25.4 * 100);
@@ -329,13 +332,16 @@ public class SimplePrintAgent
                     printDoc.PrintPage += (sender, e) =>
                     {
                         var bounds = e.MarginBounds;
-                        // Render at 300 DPI, fit to receipt width
-                        int targetPx = (int)(e.PageSettings.PaperSize.Width / 100f * 300);
-                        var opts = new RenderOptions(Dpi: 300, Width: targetPx, WithAspectRatio: true);
+                        // Render at 300 DPI
+                        var opts = new RenderOptions(Dpi: 300);
                         using var skBitmap = Conversion.ToImage(fileBytes, currentPage, null, opts);
                         using var skData = skBitmap.Encode(SKEncodedImageFormat.Png, 100);
                         using var ms2 = new MemoryStream(skData.ToArray());
                         using var img = Image.FromStream(ms2);
+
+                        // If PDF is landscape, rotate 90° clockwise to make it portrait
+                        if (pdfIsLandscape)
+                            img.RotateFlip(RotateFlipType.Rotate90FlipNone);
 
                         // Fit width, proportional height, top-aligned (not centered)
                         float scale = (float)bounds.Width / img.Width;
@@ -416,7 +422,7 @@ public class SimplePrintAgent
                     int customPct = 100;
 
                     // --- Main dialog: sizing + preview ---
-                    int leftW = 300, prevW = 440, formH = 620;
+                    int leftW = 300, prevW = 440, formH = 560;
                     using var mainForm = new Form
                     {
                         Text = $"Yazd\u0131rma - {fileName}",
@@ -437,28 +443,18 @@ public class SimplePrintAgent
                     var nudPct = new NumericUpDown { Location = new Point(105, 116), Size = new Size(75, 28), Minimum = 25, Maximum = 400, Value = 100, Increment = 10, Font = new Font("Segoe UI", 10) };
                     var lblPct = new Label { Text = "%", Location = new Point(184, 120), AutoSize = true, Font = new Font("Segoe UI", 10) };
 
-                    // Page size selector
-                    var lblPage = new Label { Text = "Ka\u011f\u0131t Boyutu:", Location = new Point(20, 155), AutoSize = true, Font = new Font("Segoe UI", 12, FontStyle.Bold) };
-                    var cmbPage = new ComboBox { Location = new Point(30, 185), Size = new Size(250, 30), Font = new Font("Segoe UI", 10), DropDownStyle = ComboBoxStyle.DropDownList };
-                    // name, width mm, height mm
-                    var pageSizes = new[] {
-                        ("A4 (210 x 297 mm)", 210f, 297f),
-                        ("A3 (297 x 420 mm)", 297f, 420f),
-                        ("A5 (148 x 210 mm)", 148f, 210f),
-                        ("Letter (216 x 279 mm)", 216f, 279f),
-                        ("Legal (216 x 356 mm)", 216f, 356f),
-                    };
-                    foreach (var ps in pageSizes) cmbPage.Items.Add(ps.Item1);
-                    cmbPage.SelectedIndex = 0;
+                    // Paper size: fixed A4
+                    float pageW = 210f, pageH = 297f;
+                    var lblPage = new Label { Text = "Ka\u011f\u0131t: A4 (210 x 297 mm)", Location = new Point(20, 155), AutoSize = true, Font = new Font("Segoe UI", 10) };
 
                     // File info
                     string szTxt = fileBytes.Length < 1048576 ? $"{fileBytes.Length / 1024.0:N0} KB" : $"{fileBytes.Length / 1048576.0:N1} MB";
-                    var lblInfo = new Label { Text = $"Dosya: {fileName}\nBoyut: {szTxt}  |  Sayfa: {pageCount}", Location = new Point(25, 225), Size = new Size(270, 40), Font = new Font("Segoe UI", 9) };
+                    var lblInfo = new Label { Text = $"Dosya: {fileName}\nBoyut: {szTxt}  |  Sayfa: {pageCount}", Location = new Point(25, 185), Size = new Size(270, 40), Font = new Font("Segoe UI", 9) };
 
-                    // Margins section - wider, clearer
-                    var lblMargin = new Label { Text = "Kenar Bo\u015fluklar\u0131 (mm):", Location = new Point(20, 270), AutoSize = true, Font = new Font("Segoe UI", 12, FontStyle.Bold) };
+                    // Margins section
+                    var lblMargin = new Label { Text = "Kenar Bo\u015fluklar\u0131 (mm):", Location = new Point(20, 230), AutoSize = true, Font = new Font("Segoe UI", 12, FontStyle.Bold) };
 
-                    int mRow1 = 305, mRow2 = 343;
+                    int mRow1 = 265, mRow2 = 303;
                     int mCol1Lbl = 30, mCol1Nud = 80, mCol2Lbl = 160, mCol2Nud = 210;
                     var fntM = new Font("Segoe UI", 10);
                     var nudSz = new Size(70, 28);
@@ -483,8 +479,6 @@ public class SimplePrintAgent
                         g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
                         g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
 
-                        var selPage = pageSizes[cmbPage.SelectedIndex];
-                        float pageW = selPage.Item2, pageH = selPage.Item3;
                         float a4R = pageH / pageW;
                         int pad = 12;
                         int aw = prevPanel.Width - 2 * pad, ah = prevPanel.Height - 2 * pad;
@@ -536,7 +530,6 @@ public class SimplePrintAgent
                     };
 
                     // Update preview on change
-                    cmbPage.SelectedIndexChanged += (s, ev) => prevPanel.Refresh();
                     rbFit.CheckedChanged += (s, ev) => prevPanel.Refresh();
                     rbActual.CheckedChanged += (s, ev) => prevPanel.Refresh();
                     rbCustom.CheckedChanged += (s, ev) => prevPanel.Refresh();
@@ -553,7 +546,7 @@ public class SimplePrintAgent
                     btnPrint.Click += (s, ev) => { mainForm.DialogResult = DialogResult.OK; };
                     btnCancel.Click += (s, ev) => { mainForm.DialogResult = DialogResult.Cancel; };
 
-                    mainForm.Controls.AddRange(new Control[] { lblScale, rbFit, rbActual, rbCustom, nudPct, lblPct, lblPage, cmbPage, lblInfo, lblMargin, lblTopM, nudTopM, lblBotM, nudBotM, lblLeftM, nudLeftM, lblRightM, nudRightM, lblPrev, prevPanel, btnPrint, btnCancel });
+                    mainForm.Controls.AddRange(new Control[] { lblScale, rbFit, rbActual, rbCustom, nudPct, lblPct, lblPage, lblInfo, lblMargin, lblTopM, nudTopM, lblBotM, nudBotM, lblLeftM, nudLeftM, lblRightM, nudRightM, lblPrev, prevPanel, btnPrint, btnCancel });
                     mainForm.Shown += (s, ev) => { ForceForeground(mainForm.Handle); mainForm.TopMost = true; mainForm.BringToFront(); mainForm.Activate(); };
                     mainForm.FormClosed += (s, ev) => { prevImg?.Dispose(); prevMs?.Dispose(); };
 
@@ -577,18 +570,17 @@ public class SimplePrintAgent
                     int mR = (int)((double)nudRightM.Value * 100.0 / 25.4);
                     int mT = (int)((double)nudTopM.Value * 100.0 / 25.4);
                     int mB = (int)((double)nudBotM.Value * 100.0 / 25.4);
-                    // Read selected page size (mm to hundredths of inch)
-                    var selPS = pageSizes[cmbPage.SelectedIndex];
-                    int psW = (int)(selPS.Item2 / 25.4 * 100);
-                    int psH = (int)(selPS.Item3 / 25.4 * 100);
-                    Console.WriteLine($"📐 Mode: {scaleMode} {(scaleMode == "custom" ? customPct + "%" : "")}, Paper: {selPS.Item1}, Margins: L={nudLeftM.Value}mm R={nudRightM.Value}mm T={nudTopM.Value}mm B={nudBotM.Value}mm");
+                    // A4 paper size (mm to hundredths of inch)
+                    int psW = (int)(pageW / 25.4 * 100);
+                    int psH = (int)(pageH / 25.4 * 100);
+                    Console.WriteLine($"📐 Mode: {scaleMode} {(scaleMode == "custom" ? customPct + "%" : "")}, Paper: A4, Margins: L={nudLeftM.Value}mm R={nudRightM.Value}mm T={nudTopM.Value}mm B={nudBotM.Value}mm");
 
                     // Set up PrintDocument
                     int currentPage = 0;
                     var printDoc = new PrintDocument();
                     printDoc.DocumentName = fileName;
                     printDoc.DefaultPageSettings.Margins = new Margins(mL, mR, mT, mB);
-                    printDoc.DefaultPageSettings.PaperSize = new PaperSize(selPS.Item1, psW, psH);
+                    printDoc.DefaultPageSettings.PaperSize = new PaperSize("A4", psW, psH);
                     printDoc.DefaultPageSettings.Landscape = false;
 
                     printDoc.PrintPage += (sender, e) =>
