@@ -275,8 +275,121 @@ public class SimplePrintAgent
             string actionResult = "cancelled";
             string resultPath = tempFilePath;
 
+            // Check if this is a receipt/invoice (filename contains "Invoice")
+            bool isReceipt = isPDF && fileName.Contains("Invoice", StringComparison.OrdinalIgnoreCase);
+
+            if (isReceipt)
+            {
+                // Receipt mode: only PrintDialog, no sizing dialog
+                Console.WriteLine("\U0001f9fe Receipt detected (Invoice) - showing printer selection only...");
+
+                var dialogThread = new Thread(() =>
+                {
+                  try
+                  {
+                    int pageCount = Conversion.GetPageCount(fileBytes);
+                    Console.WriteLine($"\U0001f4c4 Receipt PDF has {pageCount} page(s)");
+
+                    // Read receipt width from config (default 80mm)
+                    int receiptWidthMm = 80;
+                    try
+                    {
+                        var configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "appsettings.json");
+                        if (File.Exists(configPath))
+                        {
+                            dynamic? cfg = JsonConvert.DeserializeObject(File.ReadAllText(configPath));
+                            receiptWidthMm = (int?)cfg?.AppSettings?.Receipt?.WidthMm ?? 80;
+                        }
+                    }
+                    catch { }
+                    Console.WriteLine($"\U0001f4cf Receipt width: {receiptWidthMm}mm");
+
+                    // Render first page to get aspect ratio for dynamic height
+                    var infoOpts = new RenderOptions(Dpi: 72);
+                    using var infoBmp = Conversion.ToImage(fileBytes, 0, null, infoOpts);
+                    float pdfAspect = (float)infoBmp.Height / infoBmp.Width;
+                    int receiptHeightMm = (int)(receiptWidthMm * pdfAspect);
+                    Console.WriteLine($"\U0001f4cf Receipt size: {receiptWidthMm}mm x {receiptHeightMm}mm (aspect {pdfAspect:F2})");
+
+                    // Paper size in hundredths of inch
+                    int psW = (int)(receiptWidthMm / 25.4 * 100);
+                    int psH = (int)(receiptHeightMm / 25.4 * 100);
+
+                    // Minimal margins (2mm)
+                    int margin = (int)(2.0 * 100.0 / 25.4);
+
+                    // Set up PrintDocument
+                    int currentPage = 0;
+                    var printDoc = new PrintDocument();
+                    printDoc.DocumentName = fileName;
+                    printDoc.DefaultPageSettings.PaperSize = new PaperSize("Receipt", psW, psH);
+                    printDoc.DefaultPageSettings.Margins = new Margins(margin, margin, margin, margin);
+
+                    printDoc.PrintPage += (sender, e) =>
+                    {
+                        var bounds = e.MarginBounds;
+                        // Render at 300 DPI, fit to receipt width
+                        int targetPx = (int)(e.PageSettings.PaperSize.Width / 100f * 300);
+                        var opts = new RenderOptions(Dpi: 300, Width: targetPx, WithAspectRatio: true);
+                        using var skBitmap = Conversion.ToImage(fileBytes, currentPage, null, opts);
+                        using var skData = skBitmap.Encode(SKEncodedImageFormat.Png, 100);
+                        using var ms2 = new MemoryStream(skData.ToArray());
+                        using var img = Image.FromStream(ms2);
+
+                        // Fit width, proportional height, top-aligned (not centered)
+                        float scale = (float)bounds.Width / img.Width;
+                        float w = img.Width * scale;
+                        float h = img.Height * scale;
+                        e.Graphics!.DrawImage(img, bounds.X, bounds.Y, w, h);
+
+                        currentPage++;
+                        e.HasMorePages = currentPage < pageCount;
+                    };
+
+                    // Show only PrintDialog (every time - no saving printer)
+                    using var ownerForm = new Form
+                    {
+                        Width = 1, Height = 1,
+                        StartPosition = FormStartPosition.CenterScreen,
+                        ShowInTaskbar = false,
+                        FormBorderStyle = FormBorderStyle.None,
+                        Opacity = 0,
+                        TopMost = true
+                    };
+                    ownerForm.Show();
+                    ForceForeground(ownerForm.Handle);
+
+                    using var printDialog = new PrintDialog();
+                    printDialog.Document = printDoc;
+                    printDialog.UseEXDialog = true;
+
+                    if (printDialog.ShowDialog(ownerForm) == DialogResult.OK)
+                    {
+                        printDoc.Print();
+                        actionResult = "receipt_printed";
+                        Console.WriteLine($"\u2705 Receipt sent to printer: {printDoc.PrinterSettings.PrinterName}");
+                    }
+                    else
+                    {
+                        actionResult = "cancelled";
+                        Console.WriteLine("\u274c Receipt print cancelled");
+                    }
+                    ownerForm.Close();
+                  }
+                  catch (Exception dialogEx)
+                  {
+                    Console.WriteLine($"\u274c Receipt print error: {dialogEx.Message}");
+                    LogError("Receipt print error", dialogEx);
+                    actionResult = "error";
+                  }
+                });
+
+                dialogThread.SetApartmentState(ApartmentState.STA);
+                dialogThread.Start();
+                dialogThread.Join();
+            }
             // For PDF files: render and show Windows print dialog
-            if (isPDF)
+            else if (isPDF)
             {
                 Console.WriteLine("🖨️ PDF detected - showing print dialog...");
 
@@ -302,7 +415,7 @@ public class SimplePrintAgent
                     int customPct = 100;
 
                     // --- Main dialog: sizing + preview ---
-                    int leftW = 300, prevW = 440, formH = 560;
+                    int leftW = 300, prevW = 440, formH = 620;
                     using var mainForm = new Form
                     {
                         Text = $"Yazd\u0131rma - {fileName}",
@@ -323,14 +436,28 @@ public class SimplePrintAgent
                     var nudPct = new NumericUpDown { Location = new Point(105, 116), Size = new Size(75, 28), Minimum = 25, Maximum = 400, Value = 100, Increment = 10, Font = new Font("Segoe UI", 10) };
                     var lblPct = new Label { Text = "%", Location = new Point(184, 120), AutoSize = true, Font = new Font("Segoe UI", 10) };
 
+                    // Page size selector
+                    var lblPage = new Label { Text = "Ka\u011f\u0131t Boyutu:", Location = new Point(20, 155), AutoSize = true, Font = new Font("Segoe UI", 12, FontStyle.Bold) };
+                    var cmbPage = new ComboBox { Location = new Point(30, 185), Size = new Size(250, 30), Font = new Font("Segoe UI", 10), DropDownStyle = ComboBoxStyle.DropDownList };
+                    // name, width mm, height mm
+                    var pageSizes = new[] {
+                        ("A4 (210 x 297 mm)", 210f, 297f),
+                        ("A3 (297 x 420 mm)", 297f, 420f),
+                        ("A5 (148 x 210 mm)", 148f, 210f),
+                        ("Letter (216 x 279 mm)", 216f, 279f),
+                        ("Legal (216 x 356 mm)", 216f, 356f),
+                    };
+                    foreach (var ps in pageSizes) cmbPage.Items.Add(ps.Item1);
+                    cmbPage.SelectedIndex = 0;
+
                     // File info
                     string szTxt = fileBytes.Length < 1048576 ? $"{fileBytes.Length / 1024.0:N0} KB" : $"{fileBytes.Length / 1048576.0:N1} MB";
-                    var lblInfo = new Label { Text = $"Dosya: {fileName}\nBoyut: {szTxt}  |  Sayfa: {pageCount}", Location = new Point(25, 160), Size = new Size(270, 40), Font = new Font("Segoe UI", 9) };
+                    var lblInfo = new Label { Text = $"Dosya: {fileName}\nBoyut: {szTxt}  |  Sayfa: {pageCount}", Location = new Point(25, 225), Size = new Size(270, 40), Font = new Font("Segoe UI", 9) };
 
                     // Margins section - wider, clearer
-                    var lblMargin = new Label { Text = "Kenar Bo\u015fluklar\u0131 (mm):", Location = new Point(20, 210), AutoSize = true, Font = new Font("Segoe UI", 12, FontStyle.Bold) };
+                    var lblMargin = new Label { Text = "Kenar Bo\u015fluklar\u0131 (mm):", Location = new Point(20, 270), AutoSize = true, Font = new Font("Segoe UI", 12, FontStyle.Bold) };
 
-                    int mRow1 = 250, mRow2 = 288;
+                    int mRow1 = 305, mRow2 = 343;
                     int mCol1Lbl = 30, mCol1Nud = 80, mCol2Lbl = 160, mCol2Nud = 210;
                     var fntM = new Font("Segoe UI", 10);
                     var nudSz = new Size(70, 28);
@@ -355,7 +482,9 @@ public class SimplePrintAgent
                         g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
                         g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
 
-                        float a4R = 297f / 210f;
+                        var selPage = pageSizes[cmbPage.SelectedIndex];
+                        float pageW = selPage.Item2, pageH = selPage.Item3;
+                        float a4R = pageH / pageW;
                         int pad = 12;
                         int aw = prevPanel.Width - 2 * pad, ah = prevPanel.Height - 2 * pad;
                         int pw, ph;
@@ -370,10 +499,10 @@ public class SimplePrintAgent
                         if (prevImg == null) return;
 
                         // Dynamic margins from controls (mm to paper pixels)
-                        float mxL = pw * (float)nudLeftM.Value / 210f;
-                        float mxR = pw * (float)nudRightM.Value / 210f;
-                        float myT = ph * (float)nudTopM.Value / 297f;
-                        float myB = ph * (float)nudBotM.Value / 297f;
+                        float mxL = pw * (float)nudLeftM.Value / pageW;
+                        float mxR = pw * (float)nudRightM.Value / pageW;
+                        float myT = ph * (float)nudTopM.Value / pageH;
+                        float myB = ph * (float)nudBotM.Value / pageH;
                         float cw = pw - mxL - mxR;
                         float ch = ph - myT - myB;
 
@@ -385,8 +514,8 @@ public class SimplePrintAgent
                         }
                         else
                         {
-                            float nw = prevImg.Width / 96f / 8.27f;
-                            float nh = prevImg.Height / 96f / 11.69f;
+                            float nw = prevImg.Width / 96f / (pageW / 25.4f);
+                            float nh = prevImg.Height / 96f / (pageH / 25.4f);
                             if (rbCustom.Checked) { float cs = (float)nudPct.Value / 100f; nw *= cs; nh *= cs; }
                             iw = pw * nw; ih = ph * nh;
                             // No clamping - allow overflow for scale > 100%
@@ -406,6 +535,7 @@ public class SimplePrintAgent
                     };
 
                     // Update preview on change
+                    cmbPage.SelectedIndexChanged += (s, ev) => prevPanel.Refresh();
                     rbFit.CheckedChanged += (s, ev) => prevPanel.Refresh();
                     rbActual.CheckedChanged += (s, ev) => prevPanel.Refresh();
                     rbCustom.CheckedChanged += (s, ev) => prevPanel.Refresh();
@@ -422,7 +552,7 @@ public class SimplePrintAgent
                     btnPrint.Click += (s, ev) => { mainForm.DialogResult = DialogResult.OK; };
                     btnCancel.Click += (s, ev) => { mainForm.DialogResult = DialogResult.Cancel; };
 
-                    mainForm.Controls.AddRange(new Control[] { lblScale, rbFit, rbActual, rbCustom, nudPct, lblPct, lblInfo, lblMargin, lblTopM, nudTopM, lblBotM, nudBotM, lblLeftM, nudLeftM, lblRightM, nudRightM, lblPrev, prevPanel, btnPrint, btnCancel });
+                    mainForm.Controls.AddRange(new Control[] { lblScale, rbFit, rbActual, rbCustom, nudPct, lblPct, lblPage, cmbPage, lblInfo, lblMargin, lblTopM, nudTopM, lblBotM, nudBotM, lblLeftM, nudLeftM, lblRightM, nudRightM, lblPrev, prevPanel, btnPrint, btnCancel });
                     mainForm.Shown += (s, ev) => { ForceForeground(mainForm.Handle); mainForm.TopMost = true; mainForm.BringToFront(); mainForm.Activate(); };
                     mainForm.FormClosed += (s, ev) => { prevImg?.Dispose(); prevMs?.Dispose(); };
 
@@ -446,13 +576,18 @@ public class SimplePrintAgent
                     int mR = (int)((double)nudRightM.Value * 100.0 / 25.4);
                     int mT = (int)((double)nudTopM.Value * 100.0 / 25.4);
                     int mB = (int)((double)nudBotM.Value * 100.0 / 25.4);
-                    Console.WriteLine($"📐 Mode: {scaleMode} {(scaleMode == "custom" ? customPct + "%" : "")}, Margins: L={nudLeftM.Value}mm R={nudRightM.Value}mm T={nudTopM.Value}mm B={nudBotM.Value}mm");
+                    // Read selected page size (mm to hundredths of inch)
+                    var selPS = pageSizes[cmbPage.SelectedIndex];
+                    int psW = (int)(selPS.Item2 / 25.4 * 100);
+                    int psH = (int)(selPS.Item3 / 25.4 * 100);
+                    Console.WriteLine($"📐 Mode: {scaleMode} {(scaleMode == "custom" ? customPct + "%" : "")}, Paper: {selPS.Item1}, Margins: L={nudLeftM.Value}mm R={nudRightM.Value}mm T={nudTopM.Value}mm B={nudBotM.Value}mm");
 
                     // Set up PrintDocument
                     int currentPage = 0;
                     var printDoc = new PrintDocument();
                     printDoc.DocumentName = fileName;
                     printDoc.DefaultPageSettings.Margins = new Margins(mL, mR, mT, mB);
+                    printDoc.DefaultPageSettings.PaperSize = new PaperSize(selPS.Item1, psW, psH);
 
                     printDoc.PrintPage += (sender, e) =>
                     {
