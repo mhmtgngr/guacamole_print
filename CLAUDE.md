@@ -62,13 +62,13 @@ Local Print Agent (C# .NET 8, runs hidden in background)
 | `remote-server-scripts/Install-UserFileWatcher.ps1` | Installer: creates scheduled task (logon + RDP reconnect triggers) |
 | `remote-server-scripts/Uninstall-FileWatcher.ps1` | Uninstaller: removes task, stops watchers, deletes install folder |
 
-## Current State (2026-02-26, branch: dev)
+## Current State (2026-03-02, branch: dev)
 
 ### What Works (CONFIRMED)
 - Docker stack runs (PostgreSQL, guacd with drive volume, Guacamole web on port 8080)
 - guacd init container sets `/drive` permissions (UID 1000) on every startup
 - Guacamole drive redirection: `\\tsclient\GuacamoleDrive` accessible in RDP sessions
-- C# print agent installs via single MSI file (v2.9.0.0) and runs hidden in background
+- C# print agent installs via single MSI file (v2.12.0.0) and runs hidden in background
 - Agent auto-starts on Windows login for **all users** (HKLM registry + StartHidden.vbs)
 - Windows Firewall rule added automatically (port 8181, localhost only)
 - Windows Defender exclusion added automatically
@@ -77,10 +77,11 @@ Local Print Agent (C# .NET 8, runs hidden in background)
 - `aggressive-intercept.js` v9.0 loaded inside WAR (no 404)
 - `Guacamole.Client.onfile` patched, stream.index >= 0 captures blob data directly
 - **Print data flows end-to-end**: JS captures bytes → sends via WS → C# receives → decodes → renders PDF
-- **Print sizing dialog** before printing: scale options (Sayfaya Sığdır / Gerçek Boyut / Özel 25-400%) + adjustable margins (mm) + live A4 preview
+- **Print sizing dialog** before printing: scale options (Sayfaya Sığdır / Gerçek Boyut / Özel 25-400%) + adjustable margins (mm) + live preview with paper size selector (A4/A3/A5/Letter/Legal)
 - **Native Windows PrintDialog appears** after sizing dialog with printer selection
 - PDF rendered at 300 DPI on-demand (pages rendered during print, not upfront)
 - Scale > 100% enlarges content (overflows page, cropped naturally)
+- **Receipt/Invoice printing**: Files with "Invoice" in name skip sizing dialog, show only PrintDialog. Paper width from config (default 80mm), height dynamic from PDF aspect ratio. For POS/ERP thermal printer use.
 - **Non-PDF files show Windows Save As dialog** (user picks save location)
 - Heartbeat ping/pong keeps connection alive
 - **Duplicate sends prevented**: filename+size dedup (10s window) + blob WeakSet + capturedFiles map
@@ -91,7 +92,7 @@ Local Print Agent (C# .NET 8, runs hidden in background)
 ### MSI Installer
 
 Single file: `local-print-agent/installer/GuacamolePrintAgent.msi` (~65 MB)
-Version: **2.9.0.0** (WiX v4, UpgradeCode: `B748B3C5-C676-4B01-83F6-6D8DEE89DFE4`)
+Version: **2.12.0.0** (WiX v4, UpgradeCode: `B748B3C5-C676-4B01-83F6-6D8DEE89DFE4`)
 
 **What it does on install:**
 1. Installs files to `C:\Program Files\GuacamolePrintAgent\` (8 files)
@@ -199,6 +200,8 @@ The `docker-compose.yml` includes:
 | Turkish chars clipped in dialog | Fixed-size labels too short for diacritics (Ö, ş, ğ) | Changed to `AutoSize = true` on all labels |
 | Dialog appears behind browser | `TopMost` + `BringToFront` not enough from background | Restored `ForceForeground` (Alt-key trick) in Shown event |
 | Scale > 100% had no effect | Content clamped back to fit within margins | Removed clamping; overflow clipped to paper bounds |
+| No paper size selection | Hardcoded A4 only | Added paper size ComboBox: A4, A3, A5, Letter, Legal |
+| POS receipt prints with A4 dialog | All PDFs went through sizing dialog | Invoice detection: filename contains "Invoice" → receipt mode (no sizing dialog) |
 
 ## How Things Are Built & Deployed
 
@@ -261,23 +264,34 @@ Three layers + dedup + heartbeat:
 
 ## C# Print Agent Details
 
-### PDF Printing Flow
+### PDF Printing Flow (Standard - A4/A3/etc.)
 1. Receive `file_transfer` message via WebSocket
 2. Decode Base64 → `byte[] fileBytes`
 3. Save to `%TEMP%\GuacamolePrint\{filename}`
-4. `Conversion.GetPageCount(fileBytes)` - get page count
-5. Render first page at 96 DPI for preview image
-6. Show **sizing dialog** (Turkish UI) with:
+4. Check if filename contains "Invoice" → if yes, use **Receipt Flow** below
+5. `Conversion.GetPageCount(fileBytes)` - get page count
+6. Render first page at 96 DPI for preview image
+7. Show **sizing dialog** (Turkish UI) with:
    - Scale options: Sayfaya Sığdır (fit) / Gerçek Boyut (actual 100%) / Özel % (25-400%)
+   - Paper size selector: A4 (default), A3, A5, Letter, Legal
    - Adjustable margins: Üst/Alt/Sol/Sağ in mm (default 6mm)
-   - Live A4 preview panel with dashed margin lines, updates on any change
+   - Live preview panel with dashed margin lines, updates on any change
    - Content overflow clipped to paper bounds for scale > 100%
-7. `ForceForeground(mainForm.Handle)` - Alt-key trick to steal focus from browser
-8. On Yazdır: read scale mode + margin values (mm → hundredths of inch)
-9. Show `PrintDialog(ownerForm)` - native Windows dialog with printer selection
-10. On OK: `PrintDocument.Print()` renders each page on-demand at 300 DPI
-11. `Conversion.ToImage(fileBytes, pageIndex, null, RenderOptions(Dpi:300))` per page
-12. Scale/position image according to user's chosen scale mode, centered within margins
+8. `ForceForeground(mainForm.Handle)` - Alt-key trick to steal focus from browser
+9. On Yazdır: read scale mode + paper size + margin values (mm → hundredths of inch)
+10. Show `PrintDialog(ownerForm)` - native Windows dialog with printer selection
+11. On OK: `PrintDocument.Print()` renders each page on-demand at 300 DPI
+12. `Conversion.ToImage(fileBytes, pageIndex, null, RenderOptions(Dpi:300))` per page
+13. Scale/position image according to user's chosen scale mode, centered within margins
+
+### Receipt/Invoice Printing Flow (POS/ERP - thermal printers)
+1. Filename contains "Invoice" (case-insensitive) → receipt mode activated
+2. No sizing dialog shown - only PrintDialog (printer selection, every time)
+3. Paper width from `appsettings.json` → `Receipt.WidthMm` (default 80mm)
+4. Paper height calculated dynamically from PDF aspect ratio
+5. Minimal margins (2mm all sides)
+6. PDF rendered at 300 DPI, fit to receipt width, top-aligned (not centered)
+7. Designed for 58mm/80mm thermal receipt printers (POS/ERP use case)
 
 ### Non-PDF File Flow
 1. Same decode + save as PDF
@@ -292,7 +306,7 @@ Three layers + dedup + heartbeat:
 | `file_transfer` | Browser → Agent | File data with base64 content |
 | `ping` | Browser → Agent | Heartbeat (every 10s) |
 | `pong` | Agent → Browser | Heartbeat response |
-| `response` | Agent → Browser | Action result (printing/saved/opened/cancelled) |
+| `response` | Agent → Browser | Action result (printing/receipt_printed/saved/opened/cancelled) |
 | `connection_established` | Agent → Browser | Welcome message on connect |
 | `status_query` / `status_response` | Both | System status |
 
