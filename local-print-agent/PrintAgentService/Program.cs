@@ -323,6 +323,7 @@ public class SimplePrintAgent
                     var printDoc = new PrintDocument();
                     printDoc.DocumentName = fileName;
                     printDoc.DefaultPageSettings.PaperSize = new PaperSize("Receipt", psW, psH);
+                    printDoc.DefaultPageSettings.Landscape = false;
                     printDoc.DefaultPageSettings.Margins = new Margins(margin, margin, margin, margin);
 
                     printDoc.PrintPage += (sender, e) =>
@@ -588,6 +589,7 @@ public class SimplePrintAgent
                     printDoc.DocumentName = fileName;
                     printDoc.DefaultPageSettings.Margins = new Margins(mL, mR, mT, mB);
                     printDoc.DefaultPageSettings.PaperSize = new PaperSize(selPS.Item1, psW, psH);
+                    printDoc.DefaultPageSettings.Landscape = false;
 
                     printDoc.PrintPage += (sender, e) =>
                     {
