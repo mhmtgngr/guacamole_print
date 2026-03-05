@@ -107,6 +107,124 @@ public class SimplePrintAgent
         catch { }
     }
 
+    /// <summary>
+    /// Convert SKBitmap directly to GDI+ Bitmap without PNG intermediate encoding.
+    /// Sets DPI metadata so DrawImage scales correctly for crisp print output.
+    /// </summary>
+    private static Bitmap ConvertToBitmap(SKBitmap skBitmap, int dpi)
+    {
+        var bitmap = new Bitmap(skBitmap.Width, skBitmap.Height, PixelFormat.Format32bppPArgb);
+        bitmap.SetResolution(dpi, dpi);
+
+        var bmpData = bitmap.LockBits(
+            new Rectangle(0, 0, skBitmap.Width, skBitmap.Height),
+            ImageLockMode.WriteOnly,
+            PixelFormat.Format32bppPArgb);
+
+        IntPtr srcPtr = skBitmap.GetPixels();
+        int srcStride = skBitmap.RowBytes;
+        int dstStride = bmpData.Stride;
+        int copyBytes = skBitmap.Width * 4;
+        byte[] rowBuf = new byte[copyBytes];
+
+        for (int y = 0; y < skBitmap.Height; y++)
+        {
+            Marshal.Copy(IntPtr.Add(srcPtr, y * srcStride), rowBuf, 0, copyBytes);
+            Marshal.Copy(rowBuf, 0, IntPtr.Add(bmpData.Scan0, y * dstStride), copyBytes);
+        }
+
+        bitmap.UnlockBits(bmpData);
+        return bitmap;
+    }
+
+    /// <summary>
+    /// Finds TEXT content width for receipt printing.
+    /// Uses dark threshold (only real text, ignores gray bg) + fill-ratio to skip lines/borders.
+    /// Only TEXT rows (fill ratio &lt; 50%) determine the width.
+    /// </summary>
+    private static Rectangle FindContentBounds(SKBitmap skBitmap, byte threshold = 240)
+    {
+        IntPtr ptr = skBitmap.GetPixels();
+        int rowBytes = skBitmap.RowBytes;
+        int width = skBitmap.Width;
+        int height = skBitmap.Height;
+        byte[] row = new byte[width * 4];
+
+        // Pass 1: top/bottom (any non-white)
+        int contentTop = -1, contentBottom = 0;
+        for (int y = 0; y < height; y++)
+        {
+            Marshal.Copy(IntPtr.Add(ptr, y * rowBytes), row, 0, width * 4);
+            for (int x = 0; x < width; x++)
+            {
+                byte b = row[x * 4], g = row[x * 4 + 1], r = row[x * 4 + 2];
+                if (r < threshold || g < threshold || b < threshold)
+                {
+                    if (contentTop < 0) contentTop = y;
+                    contentBottom = y;
+                    break;
+                }
+            }
+        }
+
+        if (contentTop < 0) return new Rectangle(0, 0, width, height);
+
+        // Pass 2: left/right from MIDDLE 60% only (skips logo at top, barcode at bottom)
+        // Threshold 180: catches anti-aliased text edges at 72 DPI, still ignores gray bg (~230)
+        byte darkThreshold = 180;
+        int left = width, right = 0;
+        int textRows = 0, skippedRows = 0;
+        int scanTop = contentTop + (int)((contentBottom - contentTop) * 0.15);
+        int scanBot = contentTop + (int)((contentBottom - contentTop) * 0.80);
+
+        for (int y = scanTop; y <= scanBot; y++)
+        {
+            Marshal.Copy(IntPtr.Add(ptr, y * rowBytes), row, 0, width * 4);
+
+            int rowLeft = width, rowRight = 0, darkCount = 0;
+            for (int x = 0; x < width; x++)
+            {
+                byte b = row[x * 4], g = row[x * 4 + 1], r = row[x * 4 + 2];
+                if (r < darkThreshold || g < darkThreshold || b < darkThreshold)
+                {
+                    darkCount++;
+                    if (x < rowLeft) rowLeft = x;
+                    if (x > rowRight) rowRight = x;
+                }
+            }
+
+            if (rowRight <= rowLeft || darkCount < 3) continue;
+
+            int span = rowRight - rowLeft;
+            float fillRatio = (float)darkCount / span;
+
+            // High fill = solid line/border → skip (text at 72 DPI has 60-80% fill, lines have 95%+)
+            if (fillRatio > 0.90f)
+            {
+                skippedRows++;
+                continue;
+            }
+
+            // This is a TEXT row → use its edges
+            textRows++;
+            if (rowLeft < left) left = rowLeft;
+            if (rowRight > right) right = rowRight;
+        }
+
+        var scanMsg = $"darkThresh={darkThreshold}, textRows={textRows}, skipped={skippedRows}, left={left}, right={right}, scanY={scanTop}-{scanBot} (page: {width}x{height})";
+        Console.WriteLine($"\U0001f50d {scanMsg}");
+        try { File.AppendAllText(Path.Combine(Path.GetTempPath(), "GuacamolePrint", "debug.log"), $"[{DateTime.Now:HH:mm:ss}] FindContentBounds: {scanMsg}\n"); } catch { }
+
+        if (right <= left) return new Rectangle(0, 0, width, height);
+
+        // Add 2% padding each side for breathing room
+        int pad = (int)(width * 0.02);
+        left = Math.Max(0, left - pad);
+        right = Math.Min(width - 1, right + pad);
+
+        return new Rectangle(left, contentTop, right - left + 1, contentBottom - contentTop + 1);
+    }
+
     public static async Task Main(string[] args)
     {
         Console.WriteLine("🚀 Starting Simple Guacamole Print Agent...");
@@ -304,22 +422,39 @@ public class SimplePrintAgent
                     catch { }
                     Console.WriteLine($"\U0001f4cf Receipt width: {receiptWidthMm}mm");
 
-                    // Render first page to get dimensions
-                    var infoOpts = new RenderOptions(Dpi: 72);
-                    using var infoBmp = Conversion.ToImage(fileBytes, 0, null, infoOpts);
+                    // Detect content bounds at 72 DPI - rotate to portrait FIRST
+                    var infoBmp = Conversion.ToImage(fileBytes, 0, null, new RenderOptions(Dpi: 72));
                     bool pdfIsLandscape = infoBmp.Width > infoBmp.Height;
-                    float pdfAspect = pdfIsLandscape
-                        ? (float)infoBmp.Width / infoBmp.Height   // landscape: use W/H so height maps to receipt width
-                        : (float)infoBmp.Height / infoBmp.Width;  // portrait: normal H/W
-                    int receiptHeightMm = (int)(receiptWidthMm * pdfAspect);
-                    Console.WriteLine($"\U0001f4cf Receipt size: {receiptWidthMm}mm x {receiptHeightMm}mm (pdfLandscape: {pdfIsLandscape}, aspect {pdfAspect:F2})");
+                    SKBitmap detectBmp;
+                    if (pdfIsLandscape)
+                    {
+                        detectBmp = new SKBitmap(infoBmp.Height, infoBmp.Width);
+                        using var rc = new SKCanvas(detectBmp);
+                        rc.Translate(detectBmp.Width, 0);
+                        rc.RotateDegrees(90);
+                        rc.DrawBitmap(infoBmp, 0, 0);
+                        infoBmp.Dispose();
+                    }
+                    else
+                        detectBmp = infoBmp;
+
+                    var contentRect = FindContentBounds(detectBmp);
+                    int cropLeft = contentRect.X;
+                    int cropWidth = contentRect.Width;
+                    // Paper height from CROPPED aspect + 50mm bottom margin for cut-off
+                    float croppedAspect = (float)detectBmp.Height / cropWidth;
+                    int bottomMarginMm = 40;
+                    int receiptHeightMm = (int)Math.Ceiling(receiptWidthMm * croppedAspect) + bottomMarginMm;
+                    var debugMsg = $"Receipt: {receiptWidthMm}x{receiptHeightMm}mm, cropX={cropLeft} cropW={cropWidth} contentRect=({contentRect.X},{contentRect.Y},{contentRect.Width},{contentRect.Height}) portrait={detectBmp.Width}x{detectBmp.Height} landscape={pdfIsLandscape}";
+                    Console.WriteLine($"\U0001f4cf {debugMsg}");
+                    File.AppendAllText(Path.Combine(Path.GetTempPath(), "GuacamolePrint", "debug.log"), $"[{DateTime.Now:HH:mm:ss}] {debugMsg}\n");
+                    int renderDpi = 1200;
+                    float detectScale = renderDpi / 72f;
+                    detectBmp.Dispose();
 
                     // Paper size in hundredths of inch
                     int psW = (int)(receiptWidthMm / 25.4 * 100);
                     int psH = (int)(receiptHeightMm / 25.4 * 100);
-
-                    // Minimal margins (2mm)
-                    int margin = (int)(2.0 * 100.0 / 25.4);
 
                     // Set up PrintDocument
                     int currentPage = 0;
@@ -327,27 +462,66 @@ public class SimplePrintAgent
                     printDoc.DocumentName = fileName;
                     printDoc.DefaultPageSettings.PaperSize = new PaperSize("Receipt", psW, psH);
                     printDoc.DefaultPageSettings.Landscape = false;
-                    printDoc.DefaultPageSettings.Margins = new Margins(margin, margin, margin, margin);
+                    printDoc.DefaultPageSettings.Margins = new Margins(0, 0, 0, 0);
 
                     printDoc.PrintPage += (sender, e) =>
                     {
-                        var bounds = e.MarginBounds;
-                        // Render at 300 DPI
-                        var opts = new RenderOptions(Dpi: 300);
-                        using var skBitmap = Conversion.ToImage(fileBytes, currentPage, null, opts);
-                        using var skData = skBitmap.Encode(SKEncodedImageFormat.Png, 100);
-                        using var ms2 = new MemoryStream(skData.ToArray());
-                        using var img = Image.FromStream(ms2);
+                        var clip = e.Graphics!.VisibleClipBounds;
 
-                        // If PDF is landscape, rotate 90° clockwise to make it portrait
+                        // Render full page at high DPI for sharp text
+                        var opts = new RenderOptions(Dpi: renderDpi);
+                        using var skFull = Conversion.ToImage(fileBytes, currentPage, null, opts);
+
+                        // If landscape, rotate
+                        SKBitmap skPage;
                         if (pdfIsLandscape)
-                            img.RotateFlip(RotateFlipType.Rotate90FlipNone);
+                        {
+                            skPage = new SKBitmap(skFull.Height, skFull.Width);
+                            using var canvas = new SKCanvas(skPage);
+                            canvas.Translate(skPage.Width, 0);
+                            canvas.RotateDegrees(90);
+                            canvas.DrawBitmap(skFull, 0, 0);
+                        }
+                        else
+                            skPage = skFull;
 
-                        // Fit width, proportional height, top-aligned (not centered)
-                        float scale = (float)bounds.Width / img.Width;
-                        float w = img.Width * scale;
+                        // Crop only LEFT/RIGHT (keep full page height)
+                        int cx = (int)(cropLeft * detectScale);
+                        int cw = (int)(cropWidth * detectScale);
+                        int ch = skPage.Height;
+                        if (cx + cw > skPage.Width) cw = skPage.Width - cx;
+
+                        using var skCropped = new SKBitmap(cw, ch);
+                        using (var cropCanvas = new SKCanvas(skCropped))
+                        {
+                            cropCanvas.Clear(SKColors.White);
+                            cropCanvas.DrawBitmap(skPage, new SKRect(cx, 0, cx + cw, ch), new SKRect(0, 0, cw, ch));
+                        }
+                        if (pdfIsLandscape) skPage.Dispose();
+
+                        using var img = ConvertToBitmap(skCropped, renderDpi);
+
+                        e.Graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                        e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
+                        e.Graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                        e.Graphics.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighQuality;
+
+                        // Fit to receipt width, center horizontally
+                        float scale = clip.Width / (float)img.Width;
+                        float w = clip.Width;
                         float h = img.Height * scale;
-                        e.Graphics!.DrawImage(img, bounds.X, bounds.Y, w, h);
+                        float x = clip.X + (clip.Width - w) / 2f;
+                        e.Graphics.DrawImage(img, x, clip.Y, w, h);
+
+                        // Force thermal printer paper feed: draw light gray line at bottom margin
+                        // Thermal printers skip trailing white space - a visible mark forces paper advance
+                        float marginY = clip.Y + h + (float)(bottomMarginMm / 25.4 * 100);
+                        using var feedPen = new Pen(Color.FromArgb(230, 230, 230), 0.5f);
+                        e.Graphics.DrawLine(feedPen, clip.X, marginY, clip.X + clip.Width, marginY);
+
+                        var printMsg = $"PrintPage: clip=({clip.X},{clip.Y},{clip.Width},{clip.Height}) img={img.Width}x{img.Height} scale={scale:F4} drawn=({x},{clip.Y},{w},{h}) feedLineY={marginY}";
+                        Console.WriteLine($"\U0001f4cf {printMsg}");
+                        try { File.AppendAllText(Path.Combine(Path.GetTempPath(), "GuacamolePrint", "debug.log"), $"[{DateTime.Now:HH:mm:ss}] {printMsg}\n"); } catch { }
 
                         currentPage++;
                         e.HasMorePages = currentPage < pageCount;
@@ -422,10 +596,10 @@ public class SimplePrintAgent
                     int customPct = 100;
 
                     // --- Main dialog: sizing + preview ---
-                    int leftW = 300, prevW = 440, formH = 560;
+                    int leftW = 300, prevW = 440, formH = 360;
                     using var mainForm = new Form
                     {
-                        Text = $"Yazd\u0131rma - {fileName}",
+                        Text = $"Yazd\u0131rma",
                         ClientSize = new Size(leftW + prevW + 20, formH),
                         StartPosition = FormStartPosition.CenterScreen,
                         FormBorderStyle = FormBorderStyle.FixedDialog,
@@ -435,7 +609,7 @@ public class SimplePrintAgent
                         ShowInTaskbar = true
                     };
 
-                    // === Left panel: scale + info + margins ===
+                    // === Left panel: scale only ===
                     var lblScale = new Label { Text = "\u00d6l\u00e7eklendirme:", Location = new Point(20, 15), AutoSize = true, Font = new Font("Segoe UI", 12, FontStyle.Bold) };
                     var rbFit = new RadioButton { Text = "Sayfaya S\u0131\u011fd\u0131r", Location = new Point(30, 50), Size = new Size(250, 30), Checked = true, Font = new Font("Segoe UI", 10) };
                     var rbActual = new RadioButton { Text = "Ger\u00e7ek Boyut (100%)", Location = new Point(30, 82), Size = new Size(250, 30), Font = new Font("Segoe UI", 10) };
@@ -447,27 +621,11 @@ public class SimplePrintAgent
                     float pageW = 210f, pageH = 297f;
                     var lblPage = new Label { Text = "Ka\u011f\u0131t: A4 (210 x 297 mm)", Location = new Point(20, 155), AutoSize = true, Font = new Font("Segoe UI", 10) };
 
-                    // File info
-                    string szTxt = fileBytes.Length < 1048576 ? $"{fileBytes.Length / 1024.0:N0} KB" : $"{fileBytes.Length / 1048576.0:N1} MB";
-                    var lblInfo = new Label { Text = $"Dosya: {fileName}\nBoyut: {szTxt}  |  Sayfa: {pageCount}", Location = new Point(25, 185), Size = new Size(270, 40), Font = new Font("Segoe UI", 9) };
-
-                    // Margins section
-                    var lblMargin = new Label { Text = "Kenar Bo\u015fluklar\u0131 (mm):", Location = new Point(20, 230), AutoSize = true, Font = new Font("Segoe UI", 12, FontStyle.Bold) };
-
-                    int mRow1 = 265, mRow2 = 303;
-                    int mCol1Lbl = 30, mCol1Nud = 80, mCol2Lbl = 160, mCol2Nud = 210;
-                    var fntM = new Font("Segoe UI", 10);
-                    var nudSz = new Size(70, 28);
-
-                    var lblTopM = new Label { Text = "\u00dcst:", Location = new Point(mCol1Lbl, mRow1 + 3), AutoSize = true, Font = fntM };
-                    var nudTopM = new NumericUpDown { Location = new Point(mCol1Nud, mRow1), Size = nudSz, Minimum = 0, Maximum = 50, Value = 6, Font = fntM };
-                    var lblBotM = new Label { Text = "Alt:", Location = new Point(mCol2Lbl, mRow1 + 3), AutoSize = true, Font = fntM };
-                    var nudBotM = new NumericUpDown { Location = new Point(mCol2Nud, mRow1), Size = nudSz, Minimum = 0, Maximum = 50, Value = 6, Font = fntM };
-
-                    var lblLeftM = new Label { Text = "Sol:", Location = new Point(mCol1Lbl, mRow2 + 3), AutoSize = true, Font = fntM };
-                    var nudLeftM = new NumericUpDown { Location = new Point(mCol1Nud, mRow2), Size = nudSz, Minimum = 0, Maximum = 50, Value = 6, Font = fntM };
-                    var lblRightM = new Label { Text = "Sa\u011f:", Location = new Point(mCol2Lbl, mRow2 + 3), AutoSize = true, Font = fntM };
-                    var nudRightM = new NumericUpDown { Location = new Point(mCol2Nud, mRow2), Size = nudSz, Minimum = 0, Maximum = 50, Value = 6, Font = fntM };
+                    // Hidden margin values (fixed 6mm defaults)
+                    var nudTopM = new NumericUpDown { Value = 6, Visible = false };
+                    var nudBotM = new NumericUpDown { Value = 6, Visible = false };
+                    var nudLeftM = new NumericUpDown { Value = 6, Visible = false };
+                    var nudRightM = new NumericUpDown { Value = 6, Visible = false };
 
                     // === Right panel: preview ===
                     var lblPrev = new Label { Text = "\u00d6nizleme:", Location = new Point(leftW + 5, 15), AutoSize = true, Font = new Font("Segoe UI", 12, FontStyle.Bold) };
@@ -535,10 +693,6 @@ public class SimplePrintAgent
                     rbCustom.CheckedChanged += (s, ev) => prevPanel.Refresh();
                     nudPct.Click += (s, ev) => rbCustom.Checked = true;
                     nudPct.ValueChanged += (s, ev) => { rbCustom.Checked = true; prevPanel.Refresh(); };
-                    nudTopM.ValueChanged += (s, ev) => prevPanel.Refresh();
-                    nudBotM.ValueChanged += (s, ev) => prevPanel.Refresh();
-                    nudLeftM.ValueChanged += (s, ev) => prevPanel.Refresh();
-                    nudRightM.ValueChanged += (s, ev) => prevPanel.Refresh();
 
                     // Buttons
                     var btnPrint = new Button { Text = "Yazd\u0131r", Location = new Point(30, formH - 60), Size = new Size(120, 42), Font = new Font("Segoe UI", 11, FontStyle.Bold), BackColor = Color.FromArgb(0, 120, 215), ForeColor = Color.White, FlatStyle = FlatStyle.Flat };
@@ -546,7 +700,7 @@ public class SimplePrintAgent
                     btnPrint.Click += (s, ev) => { mainForm.DialogResult = DialogResult.OK; };
                     btnCancel.Click += (s, ev) => { mainForm.DialogResult = DialogResult.Cancel; };
 
-                    mainForm.Controls.AddRange(new Control[] { lblScale, rbFit, rbActual, rbCustom, nudPct, lblPct, lblPage, lblInfo, lblMargin, lblTopM, nudTopM, lblBotM, nudBotM, lblLeftM, nudLeftM, lblRightM, nudRightM, lblPrev, prevPanel, btnPrint, btnCancel });
+                    mainForm.Controls.AddRange(new Control[] { lblScale, rbFit, rbActual, rbCustom, nudPct, lblPct, lblPage, lblPrev, prevPanel, btnPrint, btnCancel });
                     mainForm.Shown += (s, ev) => { ForceForeground(mainForm.Handle); mainForm.TopMost = true; mainForm.BringToFront(); mainForm.Activate(); };
                     mainForm.FormClosed += (s, ev) => { prevImg?.Dispose(); prevMs?.Dispose(); };
 
@@ -586,19 +740,26 @@ public class SimplePrintAgent
                     printDoc.PrintPage += (sender, e) =>
                     {
                         var bounds = e.MarginBounds;
+
+                        // Render at printer's native DPI for 1:1 pixel mapping (sharpest text)
+                        int renderDpi = Math.Max((int)e.Graphics!.DpiX, 300);
                         RenderOptions opts;
                         if (scaleMode == "fit")
                         {
-                            int tPx = (int)(e.PageSettings.PaperSize.Width / 100f * 300);
-                            opts = new RenderOptions(Dpi: 300, Width: tPx, WithAspectRatio: true);
+                            int tPx = (int)(e.PageSettings.PaperSize.Width / 100f * renderDpi);
+                            opts = new RenderOptions(Dpi: renderDpi, Width: tPx, WithAspectRatio: true);
                         }
                         else
-                            opts = new RenderOptions(Dpi: 300);
+                            opts = new RenderOptions(Dpi: renderDpi);
 
                         using var skBitmap = Conversion.ToImage(fileBytes, currentPage, null, opts);
-                        using var skData = skBitmap.Encode(SKEncodedImageFormat.Png, 100);
-                        using var ms = new MemoryStream(skData.ToArray());
-                        using var img = Image.FromStream(ms);
+                        using var img = ConvertToBitmap(skBitmap, renderDpi);
+
+                        // High quality rendering for crisp text
+                        e.Graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                        e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
+                        e.Graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                        e.Graphics.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighQuality;
 
                         float w, h;
                         if (scaleMode == "fit")
@@ -608,14 +769,23 @@ public class SimplePrintAgent
                         }
                         else
                         {
-                            w = img.Width / 3f; h = img.Height / 3f;
+                            // At printer DPI: img pixels / renderDpi = inches, * 100 = hundredths
+                            w = img.Width * 100f / renderDpi; h = img.Height * 100f / renderDpi;
                             if (scaleMode == "custom") { w *= customPct / 100f; h *= customPct / 100f; }
                             // No clamping - allow overflow for scale > 100% (printer crops naturally)
                         }
 
                         float x = bounds.X + (bounds.Width - w) / 2f;
                         float y = bounds.Y + (bounds.Height - h) / 2f;
-                        e.Graphics!.DrawImage(img, x, y, w, h);
+
+                        // Draw with ImageAttributes for smooth edge handling
+                        using var attrs = new System.Drawing.Imaging.ImageAttributes();
+                        attrs.SetWrapMode(System.Drawing.Drawing2D.WrapMode.TileFlipXY);
+                        e.Graphics.DrawImage(img,
+                            new Rectangle((int)x, (int)y, (int)w, (int)h),
+                            0, 0, img.Width, img.Height,
+                            GraphicsUnit.Pixel, attrs);
+
                         currentPage++;
                         e.HasMorePages = currentPage < pageCount;
                     };
