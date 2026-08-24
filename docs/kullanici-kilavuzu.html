@@ -423,7 +423,7 @@
             </tr>
             <tr>
                 <td>Ag Erisimi</td>
-                <td>Guacamole sunucusuna erisim: <code>https://rguac.tdv.org:9443</code></td>
+                <td>Guacamole sunucusuna erisim: <code>https://rguac.tdv.org/guacamole/</code></td>
             </tr>
             <tr>
                 <td>Yonetici Yetkisi</td>
@@ -444,14 +444,14 @@
         <!-- ===== 3. KURULUM ===== -->
         <h2 id="kurulum" class="page-break">3. Kurulum Adimlari</h2>
 
-        <h3>3.1 MSI Dosyasini Edinin</h3>
+        <h3>3.1 Kurulum Dosyasini Edinin</h3>
 
         <div class="step-card">
             <span class="step-number">1</span>
-            <span class="step-title">Kurulum dosyasini indirin veya kopyalayin</span>
+            <span class="step-title">Kurulum dosyasini edinin</span>
             <div class="step-content">
-                <p>IT biriminizden <code>GuacamolePrintAgent.msi</code> dosyasini edinin
-                (yaklasik 65 MB). Dosyayi masaustunuze veya istediginiz bir klasore kaydedin.</p>
+                <p>IT biriminizden <code>GuacamolePrintAgentSetup.exe</code> dosyasini edinin.
+                Dosyayi masaustunuze veya istediginiz bir klasore kaydedin.</p>
             </div>
         </div>
 
@@ -459,9 +459,9 @@
 
         <div class="step-card">
             <span class="step-number">2</span>
-            <span class="step-title">MSI dosyasina cift tiklayin</span>
+            <span class="step-title">EXE dosyasina cift tiklayin</span>
             <div class="step-content">
-                <p><code>GuacamolePrintAgent.msi</code> dosyasina cift tiklayarak kurulumu baslatin.</p>
+                <p><code>GuacamolePrintAgentSetup.exe</code> dosyasina cift tiklayarak kurulumu baslatin.</p>
             </div>
         </div>
 
@@ -520,7 +520,7 @@
 
         <h3>3.3 Sessiz Kurulum (IT Yoneticileri Icin)</h3>
         <p>Toplu dagitim icin komut satirindan sessiz kurulum:</p>
-        <pre><code>msiexec /i GuacamolePrintAgent.msi /qn</code></pre>
+        <pre><code>GuacamolePrintAgentSetup.exe /quiet</code></pre>
         <p>Kurulum sonrasi ajanin hemen baslatilmasi icin:</p>
         <pre><code>wscript.exe "C:\Program Files\GuacamolePrintAgent\StartHidden.vbs"</code></pre>
 
@@ -532,7 +532,7 @@
             <span class="step-title">Tarayicida Guacamole adresini acin</span>
             <div class="step-content">
                 <p>Web tarayicinizda asagidaki adresi acin:</p>
-                <pre><code>https://rguac.tdv.org:9443/guacamole/#/</code></pre>
+                <pre><code>https://rguac.tdv.org/guacamole/</code></pre>
                 <p>Guacamole sizi otomatik olarak kurumsal <strong>ADFS giris sayfasina</strong> yonlendirecektir.</p>
                 <div class="screenshot-wrapper">
                     <img class="screenshot" src="screenshots/01-adfs-giris.png" alt="ADFS giris sayfasi">
@@ -820,7 +820,7 @@ Print agent CONNECTED</code></pre>
                     <li>Islem yoksa, Baslat menusu arama cubuguna <code>StartHidden</code> yazip calistirin:
                         <pre><code>C:\Program Files\GuacamolePrintAgent\StartHidden.vbs</code></pre>
                     </li>
-                    <li>Hala calismiyorsa, MSI dosyasini tekrar calistirarak <strong>"Onar"</strong> secenegini kullanin</li>
+                    <li>Hala calismiyorsa, kurulum dosyasini (<code>GuacamolePrintAgentSetup.exe</code>) tekrar calistirin</li>
                 </ol>
             </div>
         </div>
@@ -904,7 +904,7 @@ Print agent CONNECTED</code></pre>
         </div>
 
         <h3>8.2 Komut Satirindan Kaldirma</h3>
-        <pre><code>msiexec /x GuacamolePrintAgent.msi /qn</code></pre>
+        <pre><code>GuacamolePrintAgentSetup.exe /uninstall /quiet</code></pre>
 
         <div class="info-box">
             <strong>Kaldirma Islemleri:</strong>
