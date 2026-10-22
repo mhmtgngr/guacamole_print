@@ -95,6 +95,49 @@ public class SimplePrintAgent
     private static readonly string TempFolder = Path.Combine(Path.GetTempPath(), "GuacamolePrint");
     private static readonly string LogFile = Path.Combine(TempFolder, "error.log");
 
+    /// <summary>
+    /// Make an incoming name safe for the file system. RDP print jobs carry the document title as filename;
+    /// apps printing from an embedded browser (e.g. Nebim) send "about:blank", which on NTFS becomes
+    /// a 0-byte "about" file with the data hidden in an alternate stream.
+    /// </summary>
+    private static string SanitizeFileName(string? name, bool isPDF)
+    {
+        name = (name ?? "").Trim();
+        if (name.Length == 0 || name.StartsWith("about:", StringComparison.OrdinalIgnoreCase))
+            name = $"Belge-{DateTime.Now:yyyyMMdd-HHmmss}";
+
+        var invalid = Path.GetInvalidFileNameChars();
+        var sb = new System.Text.StringBuilder(name.Length);
+        foreach (var c in name) sb.Append(Array.IndexOf(invalid, c) >= 0 ? '_' : c);
+        name = sb.ToString().Trim(' ', '.');
+        if (name.Length == 0) name = $"Belge-{DateTime.Now:yyyyMMdd-HHmmss}";
+        if (name.Length > 150) name = name.Substring(0, 150);
+
+        if (isPDF && !name.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase)) name += ".pdf";
+        return name;
+    }
+
+    // Upper bound for page render DPI. 1200 DPI A4 = ~140M px (>500 MB per bitmap) -> out of memory / driver failure
+    private const int MaxRenderDpi = 600;
+
+    /// <summary>
+    /// Show print failure to the user (otherwise errors only land in error.log and the print silently disappears).
+    /// </summary>
+    private static void ShowPrintError(string fileName, string? printerName, Exception ex)
+    {
+        try
+        {
+            var msg = "Yazdırma başarısız oldu.\n\n"
+                + $"Dosya: {fileName}\n"
+                + $"Yazıcı: {printerName ?? "(seçilmedi)"}\n"
+                + $"Hata: {ex.Message}\n\n"
+                + $"Ayrıntılar: {LogFile}";
+            MessageBox.Show(msg, "Guacamole Print Agent", MessageBoxButtons.OK, MessageBoxIcon.Error,
+                MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
+        }
+        catch { }
+    }
+
     private static void LogError(string message, Exception? ex = null)
     {
         try
@@ -225,6 +268,9 @@ public class SimplePrintAgent
         return new Rectangle(left, contentTop, right - left + 1, contentBottom - contentTop + 1);
     }
 
+    // Agent version from AssemblyVersion (csproj) - reported to browser for update checks
+    private static readonly string AgentVersion = typeof(SimplePrintAgent).Assembly.GetName().Version?.ToString() ?? "0.0.0.0";
+
     public static async Task Main(string[] args)
     {
         Console.WriteLine("🚀 Starting Simple Guacamole Print Agent...");
@@ -263,7 +309,7 @@ public class SimplePrintAgent
         });
 
         app.MapGet("/health", (HttpContext context) => {
-            return Results.Json(new { status = "healthy", timestamp = DateTime.UtcNow });
+            return Results.Json(new { status = "healthy", version = AgentVersion, timestamp = DateTime.UtcNow });
         });
 
         Console.WriteLine("📡 Starting server on port 8181...");
@@ -281,7 +327,7 @@ public class SimplePrintAgent
             data = new
             {
                 connectionId = Guid.NewGuid().ToString(),
-                serverVersion = "1.0.0-simple",
+                serverVersion = AgentVersion,
                 supportedActions = new[] { "print", "download", "open", "prompt" }
             }
         };
@@ -363,8 +409,11 @@ public class SimplePrintAgent
             var fileType = (string?)message.file.type ?? "application/octet-stream";
             var userName = (string?)message.metadata?.userName ?? "default";
             var isPDF = (bool?)message.metadata?.isPDF ?? fileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase);
+            var originalFileName = fileName;
+            fileName = SanitizeFileName(fileName, isPDF);
 
-            Console.WriteLine($"📁 Received file: {fileName} from user {userName} (type: {fileType}, isPDF: {isPDF})");
+            Console.WriteLine($"📁 Received file: {fileName} (original: {originalFileName}) from user {userName} (type: {fileType}, isPDF: {isPDF})");
+            try { File.AppendAllText(Path.Combine(TempFolder, "debug.log"), $"[{DateTime.Now:HH:mm:ss}] Received: '{originalFileName}' -> '{fileName}' type={fileType} isPDF={isPDF}\n"); } catch { }
 
             // Create per-user folder
             var userFolder = Path.Combine(BaseFolder, userName);
@@ -403,6 +452,7 @@ public class SimplePrintAgent
 
                 var dialogThread = new Thread(() =>
                 {
+                  string? selectedPrinter = null;
                   try
                   {
                     int pageCount = Conversion.GetPageCount(fileBytes);
@@ -448,7 +498,8 @@ public class SimplePrintAgent
                     var debugMsg = $"Receipt: {receiptWidthMm}x{receiptHeightMm}mm, cropX={cropLeft} cropW={cropWidth} contentRect=({contentRect.X},{contentRect.Y},{contentRect.Width},{contentRect.Height}) portrait={detectBmp.Width}x{detectBmp.Height} landscape={pdfIsLandscape}";
                     Console.WriteLine($"\U0001f4cf {debugMsg}");
                     File.AppendAllText(Path.Combine(Path.GetTempPath(), "GuacamolePrint", "debug.log"), $"[{DateTime.Now:HH:mm:ss}] {debugMsg}\n");
-                    int renderDpi = 1200;
+                    // Thermal printers are 203-300 DPI; MaxRenderDpi keeps text sharp without huge bitmaps
+                    int renderDpi = MaxRenderDpi;
                     float detectScale = renderDpi / 72f;
                     detectBmp.Dispose();
 
@@ -546,6 +597,7 @@ public class SimplePrintAgent
 
                     if (printDialog.ShowDialog(ownerForm) == DialogResult.OK)
                     {
+                        selectedPrinter = printDoc.PrinterSettings.PrinterName;
                         printDoc.Print();
                         actionResult = "receipt_printed";
                         Console.WriteLine($"\u2705 Receipt sent to printer: {printDoc.PrinterSettings.PrinterName}");
@@ -560,8 +612,9 @@ public class SimplePrintAgent
                   catch (Exception dialogEx)
                   {
                     Console.WriteLine($"\u274c Receipt print error: {dialogEx.Message}");
-                    LogError("Receipt print error", dialogEx);
+                    LogError($"Receipt print error (printer: {selectedPrinter})", dialogEx);
                     actionResult = "error";
+                    ShowPrintError(fileName, selectedPrinter, dialogEx);
                   }
                 });
 
@@ -576,6 +629,7 @@ public class SimplePrintAgent
 
                 var dialogThread = new Thread(() =>
                 {
+                  string? selectedPrinter = null;
                   try
                   {
                     // Get page count (fast, no rendering)
@@ -741,8 +795,8 @@ public class SimplePrintAgent
                     {
                         var bounds = e.MarginBounds;
 
-                        // Render at printer's native DPI for 1:1 pixel mapping (sharpest text)
-                        int renderDpi = Math.Max((int)e.Graphics!.DpiX, 300);
+                        // Render at printer's native DPI for 1:1 pixel mapping, capped to avoid out-of-memory on 1200 DPI printers
+                        int renderDpi = Math.Clamp((int)e.Graphics!.DpiX, 300, MaxRenderDpi);
                         RenderOptions opts;
                         if (scaleMode == "fit")
                         {
@@ -754,6 +808,7 @@ public class SimplePrintAgent
 
                         using var skBitmap = Conversion.ToImage(fileBytes, currentPage, null, opts);
                         using var img = ConvertToBitmap(skBitmap, renderDpi);
+                        try { File.AppendAllText(Path.Combine(TempFolder, "debug.log"), $"[{DateTime.Now:HH:mm:ss}] PrintPage {currentPage + 1}/{pageCount}: printer={e.PageSettings.PrinterSettings.PrinterName} printerDpi={e.Graphics.DpiX} renderDpi={renderDpi} img={img.Width}x{img.Height} mode={scaleMode}\n"); } catch { }
 
                         // High quality rendering for crisp text
                         e.Graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
@@ -810,6 +865,14 @@ public class SimplePrintAgent
 
                     if (printDialog.ShowDialog(ownerForm) == DialogResult.OK)
                     {
+                        selectedPrinter = printDoc.PrinterSettings.PrinterName;
+
+                        // Use the printer's own A4 entry instead of a custom 210x297 size:
+                        // some drivers (e.g. Brother GDI) silently drop jobs with custom paper sizes
+                        var nativeA4 = printDoc.PrinterSettings.PaperSizes.Cast<PaperSize>().FirstOrDefault(p => p.Kind == PaperKind.A4);
+                        if (nativeA4 != null) printDoc.DefaultPageSettings.PaperSize = nativeA4;
+                        try { File.AppendAllText(Path.Combine(TempFolder, "debug.log"), $"[{DateTime.Now:HH:mm:ss}] Printer={selectedPrinter} paper={printDoc.DefaultPageSettings.PaperSize.PaperName} kind={printDoc.DefaultPageSettings.PaperSize.Kind} nativeA4={(nativeA4 != null)}\n"); } catch { }
+
                         printDoc.Print();
                         actionResult = "printing";
                         Console.WriteLine("✅ Sent to printer");
@@ -824,8 +887,9 @@ public class SimplePrintAgent
                   catch (Exception dialogEx)
                   {
                     Console.WriteLine($"❌ Print error: {dialogEx.Message}");
-                    LogError("PDF print error", dialogEx);
+                    LogError($"PDF print error (printer: {selectedPrinter})", dialogEx);
                     actionResult = "error";
+                    ShowPrintError(fileName, selectedPrinter, dialogEx);
                   }
                 });
 
@@ -1053,7 +1117,7 @@ public class SimplePrintAgent
             {
                 server = new
                 {
-                    version = "1.0.0-simple",
+                    version = AgentVersion,
                     uptime = 3600,
                     activeConnections = 1
                 },

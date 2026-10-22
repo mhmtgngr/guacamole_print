@@ -9,9 +9,14 @@ console.log('🚀 PRINT INTERCEPTION v9.0');
 
     // ===== CONFIGURATION =====
     var AGENT_URL = 'ws://localhost:8181/ws';
+    // Agents older than this get an update warning (bump on each agent release)
+    var MIN_AGENT_VERSION = '2.19.0.0';
+    var AGENT_DOWNLOAD_URL = 'https://drive.google.com/file/d/1QvW7l2f9tM2YslBzcNeuqP9BRNrLazL2/view?usp=sharing';
     var ws = null;
     var isConnected = false;
     var reconnectTimer = null;
+    var agentVersion = null;
+    var versionChecked = false;
 
     // Track blobs we've already sent to avoid duplicates
     var sentBlobs = new WeakSet();
@@ -38,9 +43,53 @@ console.log('🚀 PRINT INTERCEPTION v9.0');
     function updateStatusDot(connected) {
         if (!statusIcon && document.body) createStatusDot();
         if (!statusIcon) return;
-        statusIcon.style.color = connected ? '#4CAF50' : '#888';
-        statusIcon.style.background = connected ? 'rgba(76,175,80,0.15)' : 'rgba(0,0,0,0.5)';
-        statusIcon.title = 'Print Agent: ' + (connected ? 'connected' : 'disconnected');
+        var outdated = connected && versionChecked && isAgentOutdated();
+        statusIcon.style.color = outdated ? '#FF9800' : (connected ? '#4CAF50' : '#888');
+        statusIcon.style.background = outdated ? 'rgba(255,152,0,0.15)' : (connected ? 'rgba(76,175,80,0.15)' : 'rgba(0,0,0,0.5)');
+        statusIcon.title = 'Print Agent: ' + (connected ? 'connected' : 'disconnected')
+            + (connected && agentVersion ? ' (v' + agentVersion + ')' : '')
+            + (outdated ? ' - güncelleme gerekli (min v' + MIN_AGENT_VERSION + ')' : '');
+    }
+
+    // ===== AGENT VERSION CHECK =====
+    // Compares dotted versions numerically; non-numeric parts (e.g. "1.0.0-simple") count as 0
+    function compareVersions(a, b) {
+        var pa = String(a).split('.'), pb = String(b).split('.');
+        for (var i = 0; i < Math.max(pa.length, pb.length); i++) {
+            var na = parseInt(pa[i], 10) || 0, nb = parseInt(pb[i], 10) || 0;
+            if (na !== nb) return na < nb ? -1 : 1;
+        }
+        return 0;
+    }
+    function isAgentOutdated() {
+        // Agents before v2.19 report no real version - treat missing as outdated
+        return !agentVersion || compareVersions(agentVersion, MIN_AGENT_VERSION) < 0;
+    }
+
+    var updateBanner = null;
+    function showUpdateBanner() {
+        if (updateBanner || !document.body) return;
+        try { if (sessionStorage.getItem('guacPrintUpdateDismissed') === MIN_AGENT_VERSION) return; } catch (e) {}
+        updateBanner = document.createElement('div');
+        updateBanner.id = 'guac-print-update';
+        updateBanner.style.cssText = 'position:fixed;bottom:54px;left:10px;max-width:320px;padding:10px 32px 10px 12px;border-radius:8px;background:#FFF3E0;color:#5D4037;border:1px solid #FF9800;font:13px/1.4 Segoe UI,Arial,sans-serif;z-index:99999;box-shadow:0 2px 8px rgba(0,0,0,0.25);';
+        updateBanner.innerHTML = '<b>Print Agent güncel değil</b><br>'
+            + 'Kurulu sürüm: ' + (agentVersion || 'bilinmiyor') + ', gerekli: ' + MIN_AGENT_VERSION + '<br>'
+            + '<a href="' + AGENT_DOWNLOAD_URL + '" target="_blank" rel="noopener" style="color:#E65100;font-weight:bold;">Güncellemeyi indir</a>';
+        var closeBtn = document.createElement('span');
+        closeBtn.textContent = '×';
+        closeBtn.title = 'Kapat';
+        closeBtn.style.cssText = 'position:absolute;top:4px;right:10px;cursor:pointer;font-size:18px;';
+        closeBtn.onclick = function() {
+            try { sessionStorage.setItem('guacPrintUpdateDismissed', MIN_AGENT_VERSION); } catch (e) {}
+            hideUpdateBanner();
+        };
+        updateBanner.appendChild(closeBtn);
+        document.body.appendChild(updateBanner);
+    }
+    function hideUpdateBanner() {
+        if (updateBanner && updateBanner.parentNode) updateBanner.parentNode.removeChild(updateBanner);
+        updateBanner = null;
     }
 
     // ===== WEBSOCKET CONNECTION =====
@@ -64,6 +113,8 @@ console.log('🚀 PRINT INTERCEPTION v9.0');
             ws.onclose = function() {
                 isConnected = false;
                 console.log('🔌 Print agent disconnected');
+                agentVersion = null;
+                versionChecked = false;
                 updateStatusDot(false);
                 ws = null;
                 if (!reconnectTimer) {
@@ -80,6 +131,13 @@ console.log('🚀 PRINT INTERCEPTION v9.0');
                 try {
                     var msg = JSON.parse(event.data);
                     console.log('📨 Print agent:', msg.type, msg.data ? msg.data.action : '');
+                    if (msg.type === 'connection_established') {
+                        agentVersion = msg.data && msg.data.serverVersion;
+                        versionChecked = true;
+                        console.log('ℹ️ Print agent version:', agentVersion, '(min ' + MIN_AGENT_VERSION + ')');
+                        updateStatusDot(true);
+                        if (isAgentOutdated()) showUpdateBanner(); else hideUpdateBanner();
+                    }
                 } catch (e) {}
             };
 

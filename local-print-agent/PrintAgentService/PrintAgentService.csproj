@@ -13,8 +13,8 @@
     <AssemblyDescription>Local agent for Guacamole printing and file transfer</AssemblyDescription>
     <AssemblyCompany>Guacamole Print Solution</AssemblyCompany>
     <AssemblyProduct>Guacamole Print Solution</AssemblyProduct>
-    <AssemblyVersion>2.18.0.0</AssemblyVersion>
-    <AssemblyFileVersion>2.18.0.0</AssemblyFileVersion>
+    <AssemblyVersion>2.19.0.0</AssemblyVersion>
+    <AssemblyFileVersion>2.19.0.0</AssemblyFileVersion>
   </PropertyGroup>
 
   <ItemGroup>
